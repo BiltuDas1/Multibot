@@ -1,0 +1,5 @@
+Flask
+Gunicorn
+TgCrypto
+pyrofork
+psutil
