@@ -3,3 +3,5 @@ Gunicorn
 TgCrypto
 pyrofork
 psutil
+motor
+python-dateutil
