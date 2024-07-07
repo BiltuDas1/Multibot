@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+Dockerfile
+docker-compose.yml
+*.session
+__pycache__
+apis/__pycache__
+modules/__pycache__
+testing
+get_string_session.py

@@ -2,6 +2,7 @@ import pyrogram
 import dateutil
 import asyncio
 import json
+import os
 from datetime import datetime
 from pyrogram import filters, types
 
@@ -259,14 +260,25 @@ async def execute(bot: 'pyrogram.client.Client', Env):
       await Env.MONGO.biltudas1bot.settings.update_one({}, {'$set': {'restarted': True, 'restarted_by': int(callback_query.from_user.id)}})
       await client.answer_callback_query(
         callback_query_id = callback_query.id,
-        text = "The bot is currently restarting. Please wait a moment. We will be back online shortly.",
+        text = "The bot is currently restarting. Please wait a moment. It will be back online shortly.",
         show_alert = True
       )
       await client.delete_messages(
         chat_id = callback_query.from_user.id,
         message_ids = callback_query.message.id
       )
-      exit(0)
+
+      # Set the Process Terminate Flag
+      with open('main.lock', 'w') as flag:
+        flag.write("")
+
+      # Disable lock
+      try:
+        os.remove('process.lock')
+      except FileNotFoundError:
+        pass
+
+      raise asyncio.exceptions.CancelledError()
 
 
 
@@ -282,6 +294,7 @@ async def execute(bot: 'pyrogram.client.Client', Env):
       'FILE': True
     }
     await Env.MONGO.biltudas1bot.settings.insert_one({'loadModules': Env.MODULES})
+
 
   # Set Restart flag accordingly
   if 'restarted' in settings:

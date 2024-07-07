@@ -1,10 +1,18 @@
+# Checks if any other process is running
+import os
+if os.path.exists('process.lock'):
+  exit(0)
+else:
+  with open('process.lock', 'w') as lock:
+    lock.write("")
+
+
 import asyncio
 import pyrogram
 import time
 from pyrogram import filters
 from modules import forward, default
-from apis import Env, account, bot
-
+from apis import Env, account, bot, errors
 
 async def main():
   # Loading modules
@@ -33,7 +41,19 @@ async def main():
           )
 
         await pyrogram.idle()
+
+        # Set the Process Restart Flag
+        with open('terminate.lock', 'w') as flag:
+          flag.write("")
+
         loop = False
+        await account.stop()
+
+        # Disable lock
+        try:
+          os.remove('process.lock')
+        except FileNotFoundError:
+          pass
 
     except pyrogram.errors.exceptions.flood_420.FloodWait as e:
       try:
