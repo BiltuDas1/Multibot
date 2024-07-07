@@ -4,37 +4,36 @@ Preamble:
 This license governs the use, redistribution, and modification of the software project MultiBot ("Software"). By using the Software, you agree to comply with the terms and conditions set forth in this license.
 
 1. Definitions:
-
 "Licensor" refers to Biltu Das.
 "Licensee" refers to any individual or entity using the Software.
 "Software" refers to MultiBot and its associated code, documentation, and related materials.
+
 2. Grant of License:
-
 Permission is hereby granted to use, copy, modify, and distribute the Software and its documentation for any purpose, subject to the following conditions.
-3. Conditions:
 
+3. Conditions:
 Redistributions of the Software in source or binary form must include this license.
 Modifications and derived works must be distributed under the same license terms as the original Software.
-4. Restrictions:
 
+4. Restrictions:
 The Software may not be sold, sublicensed, or otherwise transferred for any form of monetary gain without explicit prior written permission from the Licensor.
 Any commercial use of the Software must be approved in writing by the Licensor.
+
 5. Contributions:
-
 Any contributions to the Software shall be made under the terms of this license. By submitting contributions, you grant the Licensor a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, reproduce, modify, distribute, and sublicense your contributions as part of the Software.
+
 6. Disclaimer of Warranty:
-
 The Software is provided "as is," without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the Software or the use or other dealings in the Software.
+
 7. Limitation of Liability:
-
 In no event shall the Licensor be liable for any indirect, incidental, special, exemplary, or consequential damages arising out of or in connection with the use or performance of the Software.
+
 8. Termination:
-
 This license is effective until terminated. Your rights under this license will terminate automatically without notice if you fail to comply with any term(s) of this license. Upon termination, you must destroy all copies of the Software in your possession or control.
+
 9. Governing Law:
-
 This license shall be governed by and construed in accordance with the laws of [State/Country], without regard to its conflict of law principles.
-10. Miscellaneous:
 
+10. Miscellaneous:
 This license constitutes the entire agreement between the parties concerning the subject matter hereof. If any provision of this license is held to be unenforceable, such provision shall be reformed only to the extent necessary to make it enforceable.
 IN WITNESS WHEREOF, the parties hereto have executed this Custom Open Source License as of the day and year first above written.
