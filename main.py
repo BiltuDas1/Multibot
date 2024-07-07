@@ -7,8 +7,6 @@ from apis import Env, account, bot
 
 
 async def main():
-  print("Bot is starting...")
-
   # Loading modules
   await default.execute(bot, Env)
 

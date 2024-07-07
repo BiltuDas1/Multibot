@@ -6,6 +6,8 @@ from motor import motor_asyncio
 from .environment import Environment
 
 # Setting Up
+print("Bot is starting...")
+
 # Setting Up Database
 Env = Environment()
 Env.MONGO: 'motor_asyncio.AsyncIOMotorClient' = motor_asyncio.AsyncIOMotorClient(Env.MONGO_URI)

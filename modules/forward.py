@@ -120,7 +120,7 @@ async def personal_message(bot: pyrogram.client.Client, Env):
 
 
   @bot.on_message(filters.private)
-  async def handle_private(client: pyrogram.client.Client, message: pyrogram.types.Message):
+  async def user_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
     if str(message.chat.id) not in Env.ADMIN:
       user_details = await Env.MONGO.biltudas1bot.userList.find_one({'ID': message.chat.id}, {'_id': False})
       topicID = user_details["topicID"]
@@ -197,3 +197,48 @@ async def personal_message(bot: pyrogram.client.Client, Env):
       else:
         await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.chat.id}, {'$set': {'lastPing': lastPing}})
 
+
+  @bot.on_message(filters.group & filters.chat(int(Env.GROUP_ID)))
+  async def admin_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    if str(message.from_user.id) in Env.ADMIN:
+      user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
+
+      # If not General Topic
+      if message.message_thread_id != 1:
+        topicID = message.message_thread_id
+
+        if user_details is None:
+          client.send_message(
+            chat_id = message.chat.id,
+            message_thread_id = int(topicID),
+            reply_to_message_id = message.id,
+            text = f"**Error: User record not found, Please make sure that the user Started the bot before.**"
+          )
+          return
+          
+        uid = user_details["ID"]
+
+        if uid is not None:
+          # Copy/Forward the message to the user
+          if message.forward_date is None:
+            await client.copy_message(
+              chat_id = int(uid),
+              message_thread_id = int(topicID),
+              from_chat_id = message.chat.id,
+              message_id = message.id
+            )
+          else:
+            await client.forward_messages(
+              chat_id = int(uid),
+              message_thread_id = int(topicID),
+              from_chat_id = message.chat.id,
+              message_ids = message.id
+            )
+
+        # Store lastPing time to database
+        lastPing = dateutil.parser.parse(message.date.isoformat())
+        await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
+
+      else:
+        # If General Topic
+        pass

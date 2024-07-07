@@ -31,7 +31,10 @@ class Environment:
         self.BOT_VERSION = '0.0.0'
 
     self.OWNER_USERNAME = os.getenv("OWNER_USERNAME")
-    self.MODULES = []
+    self.MODULES = []  # Replaced automatically by reading mongodb config
+    self.NON_ADMIN_COMMANDS = []  # Replaced automatically by modules
+    self.HELP_ADMIN_MESSAGE = ""  # Replaced automatically by modules
+    self.HELP_USER_MESSAGE = ""  # Replaced automatically by modules
 
     self.__test_data() # For testing the Environments
 
