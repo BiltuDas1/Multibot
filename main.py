@@ -10,22 +10,28 @@ async def main():
   # Loading modules
   await default.execute(bot, Env)
 
-  if "FORWARD" in Env.MODULES:
+  if Env.MODULES["FORWARD"]:
     await forward.personal_message(bot, Env)
-  if "SRC" in Env.MODULES:
+  if Env.MODULES["SRC"]:
     pass
-  if "LEECH" in Env.MODULES:
+  if Env.MODULES["LEECH"]:
     pass
-  if "FILE" in Env.MODULES:
+  if Env.MODULES["FILE"]:
     pass
-  if not Env.MODULES:
-    print("No Module Loaded")
 
   loop = True
+  # Loop to handle FloodWait, so that bot don't get stuck after a FloodWait
   while loop:
     try:
       async with bot:
         print("Bot started")
+
+        if Env.RESTARTED:
+          await bot.send_message(
+            chat_id = int(Env.RESTARTED_BY_USER),
+            text = "Bot is ready to use ✅"
+          )
+
         await pyrogram.idle()
         loop = False
 

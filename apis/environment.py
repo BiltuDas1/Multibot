@@ -31,10 +31,13 @@ class Environment:
         self.BOT_VERSION = '0.0.0'
 
     self.OWNER_USERNAME = os.getenv("OWNER_USERNAME")
-    self.MODULES = []  # Replaced automatically by reading mongodb config
+    self.MODULES: 'dict[str, bool]' = {}  # Replaced automatically by reading mongodb config
     self.NON_ADMIN_COMMANDS = []  # Replaced automatically by modules
     self.HELP_ADMIN_MESSAGE = ""  # Replaced automatically by modules
     self.HELP_USER_MESSAGE = ""  # Replaced automatically by modules
+    self.CACHED_MODULE_OPTIONS: 'list[list]' = None
+    self.RESTARTED = False  # Flag tells if the bot is restarted or started directely
+    self.RESTARTED_BY_USER: 'int' = None  # User who restarted the bot
 
     self.__test_data() # For testing the Environments
 
