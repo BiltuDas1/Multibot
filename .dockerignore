@@ -1,6 +1,7 @@
 .git
 .gitignore
 .env
+.dockerignore
 Dockerfile
 docker-compose.yml
 *.session
