@@ -3,6 +3,7 @@ import dateutil
 import asyncio
 import json
 import os
+import signal
 from datetime import datetime
 from pyrogram import filters, types
 
@@ -206,6 +207,17 @@ async def execute(bot: 'pyrogram.client.Client', Env):
     )
 
 
+  @bot.on_message(filters.private & filters.command("version"))
+  async def print_version(client: 'pyrogram.client.Client', message: 'pyrogram.types.Message'):
+    with open('version', 'r') as v:
+      version = v.read().replace("\n", "")
+
+      await client.send_message(
+        chat_id = message.from_user.id,
+        text = f"Bot Version: `{version}`"
+      )
+
+
   @bot.on_callback_query(filters.regex("^(delete_message|toggle_[A-Z0-9_]+)$"))
   async def update_module_settings(client: 'pyrogram.client.Client', callback_query: 'pyrogram.types.CallbackQuery'):
     if str(callback_query.from_user.id) in Env.ADMIN:
@@ -272,13 +284,7 @@ async def execute(bot: 'pyrogram.client.Client', Env):
       with open('main.lock', 'w') as flag:
         flag.write("")
 
-      # Disable lock
-      try:
-        os.remove('process.lock')
-      except FileNotFoundError:
-        pass
-
-      raise asyncio.exceptions.CancelledError()
+      os.kill(os.getpid(), signal.SIGINT)
 
 
 
@@ -294,6 +300,13 @@ async def execute(bot: 'pyrogram.client.Client', Env):
       'FILE': True
     }
     await Env.MONGO.biltudas1bot.settings.insert_one({'loadModules': Env.MODULES})
+
+
+  # Enable Global Lock
+  if not 'global_lock' in settings or not settings['global_lock']:
+    Env.MONGO.biltudas1bot.settings.update_one({}, {'$set': {'global_lock': True}})
+  else:
+    return "TERMINATE"
 
 
   # Set Restart flag accordingly

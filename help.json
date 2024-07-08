@@ -2,7 +2,7 @@
   "commands": {
     "start": "Starts the bot",
     "help": "Shows the help message",
-    "expand": "Expands the short URL",
+    "version": "Shows the version of the bot engine",
     "shorten": "Shorten an URL (using tinyurl)",
     "id": "Gets the Chat ID of Current user",
     "ids": "Print last 10 users and their Chat IDs",
