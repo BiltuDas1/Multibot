@@ -5,3 +5,4 @@ pyrofork
 psutil
 motor
 python-dateutil
+bidict
