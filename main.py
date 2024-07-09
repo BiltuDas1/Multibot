@@ -23,12 +23,12 @@ from apis import Env, account, bot, errors
 def terminate_handler(sig, frame):
   print("[PROCESS] Bot Termination request received")
   try:
-    bot.stop()
+    asyncio.run(bot.stop())
   except ConnectionError:
     pass
 
   try:
-    account.stop()
+    asyncio.run(account.stop())
   except ConnectionError:
     pass
 

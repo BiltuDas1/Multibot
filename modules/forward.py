@@ -12,6 +12,14 @@ async def personal_message(bot: pyrogram.client.Client, Env):
   async def user_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
     if str(message.chat.id) not in Env.ADMIN:
       user_details = await Env.MONGO.biltudas1bot.userList.find_one({'ID': message.chat.id}, {'_id': False})
+      # If user data is not available
+      if user_details is None:
+        await client.send_message(
+          chat_id = message.chat.id,
+          text = "Something Went Wrong, Please use /start again"
+        )
+        return
+
       topicID = user_details["topicID"]
       userInfoID = user_details["userInfoID"]
 
@@ -54,7 +62,7 @@ async def personal_message(bot: pyrogram.client.Client, Env):
       else:
         if message.reply_to_message_id:
           try:
-            reply_message = user_details["messageIDList"][str(message.reply_to_message_id)]
+            reply_message = int(user_details["messageIDList"][str(message.reply_to_message_id)])
           except KeyError:
             reply_message = None
         else:
@@ -93,7 +101,7 @@ async def personal_message(bot: pyrogram.client.Client, Env):
             'userInfoID': userInfoID, 
             'lastPing': lastPing,
             'messageIDList': {
-                message.id: forward_msg.id
+                str(message.id): str(forward_msg.id)
               }
             }
           }
@@ -103,7 +111,7 @@ async def personal_message(bot: pyrogram.client.Client, Env):
           {'ID': message.chat.id}, 
           {'$set': {
             'lastPing': lastPing,
-            f'messageIDList.{message.id}': forward_msg.id
+            f'messageIDList.{message.id}': str(forward_msg.id)
             }
           }
         )
@@ -121,6 +129,14 @@ async def personal_message(bot: pyrogram.client.Client, Env):
     if str(message.from_user.id) in Env.ADMIN:
       user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
 
+      if user_details is None:
+        await client.send_message(
+          chat_id = int(Env.GROUP_ID),
+          message_thread_id = message.message_thread_id,
+          text = "User not found, Make sure the user message the bot first"
+        )
+        return
+
       # If not General Topic
       if message.message_thread_id != 1:
         if user_details is None:
@@ -137,7 +153,7 @@ async def personal_message(bot: pyrogram.client.Client, Env):
 
         if message.reply_to_message_id:
           try:
-            reply_message = int(bidict(user_details["messageIDList"]).inverse[message.reply_to_message_id])
+            reply_message = int(bidict(user_details["messageIDList"]).inverse[str(message.reply_to_message_id)])
           except KeyError:
             reply_message = None
         else:
@@ -167,11 +183,7 @@ async def personal_message(bot: pyrogram.client.Client, Env):
           {'topicID': message.message_thread_id}, 
           {
             '$set': {
-              f'messageIDList.{forward_msg_user.id}': message.id
+              f'messageIDList.{forward_msg_user.id}': str(message.id)
             }
           }
         )
-
-      else:
-        # If General Topic
-        pass

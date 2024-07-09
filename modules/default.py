@@ -12,6 +12,33 @@ async def execute(bot: 'pyrogram.client.Client', Env):
   """
   Function to enable global rule of the bot
   """
+  async def store_user_info(user: 'pyrogram.types.User', lastPing: 'int'):
+    user_record = await Env.MONGO.biltudas1bot.userList.find_one({'ID': user.id})
+    
+    if user_record is None:
+      # Create a new user
+      if user.last_name is None:
+        name = user.first_name
+      else:
+        name = user.first_name + " " + user.last_name
+
+      await Env.MONGO.biltudas1bot.userList.insert_one(
+        {
+          'ID': user.id,
+          'Name': name,
+          'firstPing': lastPing,
+          'lastPing': lastPing,
+          'banned': False,
+          'blocked': False,
+          'topicID': None,
+          'userInfoID': None
+        }
+      )
+    else:
+      # Update the existing user last Interaction time
+      await Env.MONGO.biltudas1bot.userList.update_one({'ID': user.id}, {'$set': {'lastPing': lastPing}})
+
+
   @bot.on_message(filters.command(["start"]) & filters.private)
   async def start_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
     if str(message.from_user.id) in Env.ADMIN:
@@ -27,30 +54,7 @@ async def execute(bot: 'pyrogram.client.Client', Env):
 
     # Store the data in database
     lastPing = dateutil.parser.parse(message.date.isoformat())
-    user = await Env.MONGO.biltudas1bot.userList.find_one({'ID': message.chat.id})
-
-    if user is None:
-      # Create a new user
-      if message.chat.last_name is None:
-        name = message.chat.first_name
-      else:
-        name = message.chat.first_name + " " + message.chat.last_name
-
-      await Env.MONGO.biltudas1bot.userList.insert_one(
-        {
-          'ID': message.chat.id,
-          'Name': name,
-          'firstPing': lastPing,
-          'lastPing': lastPing,
-          'banned': False,
-          'blocked': False,
-          'topicID': None,
-          'userInfoID': None
-        }
-      )
-    else:
-      # Update the existing user Interaction time
-      await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.chat.id}, {'$set': {'lastPing': lastPing}})
+    await store_user_info(message.from_user, lastPing)
 
 
   @bot.on_message(filters.group & pyrogram.filters.new_chat_members)
@@ -148,6 +152,10 @@ async def execute(bot: 'pyrogram.client.Client', Env):
         text = Env.HELP_USER_MESSAGE
       )
 
+    # Store user info in database
+    lastPing = dateutil.parser.parse(message.date.isoformat())
+    await store_user_info(message.from_user, lastPing)
+
 
   @bot.on_message(filters.private & filters.command("id"))
   async def get_user_id(client: 'pyrogram.client.Client', message: 'pyrogram.types.Message'):
@@ -155,6 +163,10 @@ async def execute(bot: 'pyrogram.client.Client', Env):
       chat_id = message.chat.id,
       text = f"Your ChatID is: `{message.from_user.id}`"
     )
+
+    # Store user info in database
+    lastPing = dateutil.parser.parse(message.date.isoformat())
+    await store_user_info(message.from_user, lastPing)
 
 
   @bot.on_message(filters.private & filters.command("modules") & filters.user([int(uid) for uid in Env.ADMIN]))
@@ -206,8 +218,12 @@ async def execute(bot: 'pyrogram.client.Client', Env):
       reply_markup = types.InlineKeyboardMarkup(Env.CACHED_MODULE_OPTIONS)
     )
 
+    # Store user info in database
+    lastPing = dateutil.parser.parse(message.date.isoformat())
+    await store_user_info(message.from_user, lastPing)
 
-  @bot.on_message(filters.private & filters.command("version"))
+
+  @bot.on_message(filters.private & filters.command("version") & filters.user([int(uid) for uid in Env.ADMIN]))
   async def print_version(client: 'pyrogram.client.Client', message: 'pyrogram.types.Message'):
     with open('version', 'r') as v:
       version = v.read().replace("\n", "")
@@ -216,6 +232,10 @@ async def execute(bot: 'pyrogram.client.Client', Env):
         chat_id = message.from_user.id,
         text = f"Bot Version: `{version}`"
       )
+
+    # Store user info in database
+    lastPing = dateutil.parser.parse(message.date.isoformat())
+    await store_user_info(message.from_user, lastPing)
 
 
   @bot.on_callback_query(filters.regex("^(delete_message|toggle_[A-Z0-9_]+)$"))
