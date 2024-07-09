@@ -126,7 +126,7 @@ async def personal_message(bot: pyrogram.client.Client, Env):
     )
 
 
-  @bot.on_message(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
+  @bot.on_message(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
   async def admin_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
     user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
 
@@ -139,56 +139,54 @@ async def personal_message(bot: pyrogram.client.Client, Env):
       )
       return
 
-    # If not General Topic
-    if message.message_thread_id != 1:
-      if user_details["blocked"]:
-        await client.send_message(
-          chat_id = int(Env.GROUP_ID),
-          message_thread_id = message.message_thread_id,
-          reply_to_message_id = message.id,
-          text = f"**Error: User blocked the bot, so Sending Message is not Possible.**"
-        )
-        return
-        
-      topicID = message.message_thread_id
-      uid = user_details["ID"]
-
-      if message.reply_to_message_id:
-        try:
-          reply_message = int(bidict(user_details["messageIDList"]).inverse[str(message.reply_to_message_id)])
-        except KeyError:
-          reply_message = None
-      else:
-        reply_message = None
-
-      # Copy/Forward the message to the user
-      if message.forward_date is None:
-        forward_msg_user = await client.copy_message(
-          chat_id = int(uid),
-          message_thread_id = int(topicID),
-          from_chat_id = message.chat.id,
-          reply_to_message_id = reply_message,
-          message_id = message.id
-        )
-      else:
-        forward_msg_user = await client.forward_messages(
-          chat_id = int(uid),
-          message_thread_id = int(topicID),
-          from_chat_id = message.chat.id,
-          message_ids = message.id
-        )
-
-      # Store lastPing time to database
-      lastPing = dateutil.parser.parse(message.date.isoformat())
-      await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
-      await Env.MONGO.biltudas1bot.userList.update_one(
-        {'topicID': message.message_thread_id}, 
-        {
-          '$set': {
-            f'messageIDList.{forward_msg_user.id}': str(message.id)
-          }
-        }
+    if user_details["blocked"]:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        reply_to_message_id = message.id,
+        text = f"**Error: User blocked the bot, so Sending Message is not Possible.**"
       )
+      return
+      
+    topicID = message.message_thread_id
+    uid = user_details["ID"]
+
+    if message.reply_to_message_id:
+      try:
+        reply_message = int(bidict(user_details["messageIDList"]).inverse[str(message.reply_to_message_id)])
+      except KeyError:
+        reply_message = None
+    else:
+      reply_message = None
+
+    # Copy/Forward the message to the user
+    if message.forward_date is None:
+      forward_msg_user = await client.copy_message(
+        chat_id = int(uid),
+        message_thread_id = int(topicID),
+        from_chat_id = message.chat.id,
+        reply_to_message_id = reply_message,
+        message_id = message.id
+      )
+    else:
+      forward_msg_user = await client.forward_messages(
+        chat_id = int(uid),
+        message_thread_id = int(topicID),
+        from_chat_id = message.chat.id,
+        message_ids = message.id
+      )
+
+    # Store lastPing time to database
+    lastPing = dateutil.parser.parse(message.date.isoformat())
+    await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
+    await Env.MONGO.biltudas1bot.userList.update_one(
+      {'topicID': message.message_thread_id}, 
+      {
+        '$set': {
+          f'messageIDList.{forward_msg_user.id}': str(message.id)
+        }
+      }
+    )
 
 
   @bot.on_edited_message(filters.private & filters.create(lambda a, b, msg: str(msg.from_user.id) not in Env.ADMIN))
@@ -221,7 +219,7 @@ async def personal_message(bot: pyrogram.client.Client, Env):
     await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.chat.id}, {'$set': {'lastPing': lastPing}})
 
 
-  @bot.on_edited_message(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
+  @bot.on_edited_message(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
   async def admin_edited_message_hander(client: pyrogram.client.Client, message: pyrogram.types.Message):
     user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
 
@@ -234,28 +232,60 @@ async def personal_message(bot: pyrogram.client.Client, Env):
       )
       return
 
-        # If not General Topic
-    if message.message_thread_id != 1:
-      if user_details["blocked"]:
-        await client.send_message(
-          chat_id = int(Env.GROUP_ID),
-          message_thread_id = message.message_thread_id,
-          reply_to_message_id = message.id,
-          text = f"**Error: User blocked the bot, so Sending Message is not Possible.**"
-        )
-        return
-        
-      topicID = message.message_thread_id
-      uid = user_details["ID"]
-
-      # Edit message on the User Side
-      forward_msg_id = int(bidict(user_details["messageIDList"]).inverse[str(message.id)])
-      await client.edit_message_text(
-        chat_id = int(uid),
-        message_id = forward_msg_id,
-        text = message.text
+    if user_details["blocked"]:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        reply_to_message_id = message.id,
+        text = f"**Error: User blocked the bot, so Editing Message is not Possible.**"
       )
+      return
+      
+    uid = user_details["ID"]
+    # Edit message on the User Side
+    forward_msg_id = int(bidict(user_details["messageIDList"]).inverse[str(message.id)])
+    await client.edit_message_text(
+      chat_id = int(uid),
+      message_id = forward_msg_id,
+      text = message.text
+    )
 
-      # Store lastPing time to database
-      lastPing = dateutil.parser.parse(message.date.isoformat())
-      await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
+    # Store lastPing time to database
+    lastPing = dateutil.parser.parse(message.date.isoformat())
+    await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
+
+
+  @bot.on_deleted_messages(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
+  async def admin_delete_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
+
+    if user_details is None:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        reply_to_message_id = message.id,
+        text = "**Error: User record not found, Please make sure that the user started the bot before.**"
+      )
+      return
+
+    if user_details["blocked"]:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        reply_to_message_id = message.id,
+        text = f"**Error: User blocked the bot, so Deleting Message is not Possible.**"
+      )
+      return
+      
+    uid = user_details["ID"]
+
+    # Edit message on the User Side
+    delete_msg_id = int(bidict(user_details["messageIDList"]).inverse[str(message.id)])
+    await client.delete_messages(
+      chat_id = int(uid),
+      message_ids = delete_msg_id
+    )
+
+    # Store lastPing time to database
+    lastPing = dateutil.parser.parse(message.date.isoformat())
+    await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})

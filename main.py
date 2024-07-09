@@ -16,7 +16,7 @@ import pyrogram
 import time
 import signal
 from pyrogram import filters
-from modules import forward, default
+from modules import forward, default, src
 from apis import Env, account, bot, errors
 
 
@@ -66,7 +66,7 @@ async def main():
   if Env.MODULES["FORWARD"]:
     await forward.personal_message(bot, Env)
   if Env.MODULES["SRC"]:
-    pass
+    await src.save_restricted_content(bot, account, Env)
   if Env.MODULES["LEECH"]:
     pass
   if Env.MODULES["FILE"]:

@@ -3,6 +3,8 @@
     "start": "Starts the bot",
     "help": "Shows the help message",
     "version": "Shows the version of the bot engine",
+    "join": "Joins the Linked Telegram account to a Specific Chat",
+    "save": "Saves the Content Which Link Provided",
     "shorten": "Shorten an URL (using tinyurl)",
     "id": "Gets the Chat ID of Current user",
     "ids": "Print last 10 users and their Chat IDs",
