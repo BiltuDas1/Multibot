@@ -83,13 +83,6 @@ async def personal_message(bot: pyrogram.client.Client, Env):
         text = "Message Sended ✅"
       )
 
-      # Delete Ackowledgement Message (After 5 seconds)
-      await asyncio.sleep(5)
-      await client.delete_messages(
-        chat_id = message.chat.id,
-        message_ids = ack.id
-      )
-
       # Store data in Database
       lastPing = dateutil.parser.parse(message.date.isoformat())
       if user_details["topicID"] is None:
@@ -114,6 +107,13 @@ async def personal_message(bot: pyrogram.client.Client, Env):
             }
           }
         )
+
+      # Delete Ackowledgement Message (After 5 seconds)
+      await asyncio.sleep(5)
+      await client.delete_messages(
+        chat_id = message.chat.id,
+        message_ids = ack.id
+      )
 
 
   @bot.on_message(filters.group & filters.chat(int(Env.GROUP_ID)))

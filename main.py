@@ -115,5 +115,6 @@ async def main():
 
 # Starts the bot
 if __name__ == "__main__":
+  signal.signal(signal.SIGTERM, terminate_handler)
   signal.signal(signal.SIGINT, terminate_handler)
   bot.run(main())

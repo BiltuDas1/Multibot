@@ -306,7 +306,10 @@ async def execute(bot: 'pyrogram.client.Client', Env):
   if not 'global_lock' in settings or not settings['global_lock']:
     Env.MONGO.biltudas1bot.settings.update_one({}, {'$set': {'global_lock': True}})
   else:
-    return "TERMINATE"
+    if not os.path.exists('suspend.lock'):
+      return "TERMINATE"
+    else:
+      os.remove('suspend.lock')
 
 
   # Set Restart flag accordingly

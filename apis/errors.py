@@ -1,3 +1,5 @@
+import os
+
 class Error(Exception):
     """
     Exception Class for any kind of Error encounter in the Telegram bot
@@ -53,6 +55,16 @@ class Error(Exception):
             self.__MSG = MSG
         else:
             self.__MSG = self.__ERR_MSG_LIST[self.__ERR_CODE]
+
+        # Set terminate lock
+        with open('terminate.lock', 'w') as lock:
+            lock.write('')
+
+        # Remove Local Lock
+        try:
+            os.remove('process.lock')
+        except FileNotFoundError:
+            pass
 
     def __str__(self):
         return self.__MSG

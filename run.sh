@@ -1,4 +1,13 @@
 #!/bin/sh
+
+function continue_handler() {
+  # Create a lock of suspended process
+  echo >suspend.lock
+}
+
+# Catch SIGCONT Signal (Continue Suspend Process)
+trap continue_handler SIGCONT
+
 # Starting bot
 nohup python app.py 2>&1 &
 APP=$!
@@ -6,12 +15,12 @@ python -u main.py START &
 MAIN=$!
 
 function cleanup() {
-  kill -SIGINT "$APP" 2>/dev/null
-  kill -SIGINT "$MAIN" 2>/dev/null
+  kill -SIGTERM "$APP" 2>/dev/null
+  kill -SIGTERM "$MAIN" 2>/dev/null
 }
 
 # Catch SIGINT Terminate Signal and Kill the Python Processes
-trap cleanup SIGINT
+trap cleanup SIGINT SIGTERM
 
 # On loop
 while true; do
