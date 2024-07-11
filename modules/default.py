@@ -238,6 +238,30 @@ async def execute(bot: 'pyrogram.client.Client', Env):
     await store_user_info(message.from_user, lastPing)
 
 
+  @bot.on_message(filters.private & filters.command("power") & filters.user([int(uid) for uid in Env.ADMIN]))
+  async def power_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    await client.send_message(
+      chat_id = message.chat.id,
+      text = "Choose the Operation",
+      reply_markup = types.InlineKeyboardMarkup(
+        [
+          [
+            types.InlineKeyboardButton(
+              text = "Power Off ⛔",
+              callback_data = "power_off"
+            )
+          ],
+          [
+            types.InlineKeyboardButton(
+              text = "Restart 🔄",
+              callback_data = "power_reset"
+            )
+          ]
+        ]
+      )
+    )
+
+
   @bot.on_callback_query(filters.regex("^(delete_message|toggle_[A-Z0-9_]+)$"))
   async def update_module_settings(client: 'pyrogram.client.Client', callback_query: 'pyrogram.types.CallbackQuery'):
     if str(callback_query.from_user.id) in Env.ADMIN:
@@ -267,7 +291,7 @@ async def execute(bot: 'pyrogram.client.Client', Env):
           [
             types.InlineKeyboardButton(
               text = "Restart bot 🔄",
-              callback_data = "restart_bot_modules"
+              callback_data = "power_reset"
             )
           ]
         )
@@ -286,7 +310,22 @@ async def execute(bot: 'pyrogram.client.Client', Env):
         )
 
 
-  @bot.on_callback_query(filters.regex("^restart_bot_modules$"))
+  @bot.on_callback_query(filters.regex("^power_off$"))
+  async def shutdown_bot(client: pyrogram.client.Client, callback_query: pyrogram.types.CallbackQuery):
+    if str(callback_query.from_user.id) in Env.ADMIN:
+      await client.answer_callback_query(
+        callback_query_id = callback_query.id,
+        text = "The bot is shutting down, Please check the server Console Panel for more information."
+      )
+      await client.delete_messages(
+        chat_id = callback_query.from_user.id,
+        message_ids = callback_query.message.id
+      )
+
+      os.kill(os.getpid(), signal.SIGINT)
+
+
+  @bot.on_callback_query(filters.regex("^power_reset$"))
   async def restart_bot(client: 'pyrogram.client.Client', callback_query: 'pyrogram.types.CallbackQuery'):
     if str(callback_query.from_user.id) in Env.ADMIN:
       await Env.MONGO.biltudas1bot.settings.update_one({}, {'$set': {'restarted': True, 'restarted_by': int(callback_query.from_user.id)}})
