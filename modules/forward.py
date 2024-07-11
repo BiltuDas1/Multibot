@@ -20,6 +20,8 @@ async def personal_message(bot: pyrogram.client.Client, Env):
       return
 
     if user_details["banned"]:
+      lastPing = dateutil.parser.parse(message.date.isoformat())
+      await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.chat.id}, {'$set': {'lastPing': lastPing}})
       return
 
     topicID = user_details["topicID"]
@@ -126,6 +128,104 @@ async def personal_message(bot: pyrogram.client.Client, Env):
     )
 
 
+  @bot.on_edited_message(filters.private & filters.create(lambda a, b, msg: str(msg.from_user.id) not in Env.ADMIN))
+  async def user_edited_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'ID': message.chat.id}, {'_id': False})
+    # If user data is not available
+    if user_details is None:
+      await client.send_message(
+        chat_id = message.chat.id,
+        text = "Something Went Wrong, Please use /start again"
+      )
+      return
+
+    if user_details["banned"]:
+      return
+
+    if user_details["topicID"] is None:
+      return
+
+    # Edit message on the Admin Side
+    forward_msg_id = int(user_details["messageIDList"][str(message.id)])
+    await client.edit_message_text(
+      chat_id = int(Env.GROUP_ID),
+      message_id = forward_msg_id,
+      text = message.text
+    )
+
+    # Store data in database
+    lastPing = dateutil.parser.parse(message.date.isoformat())
+    await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.chat.id}, {'$set': {'lastPing': lastPing}})
+
+
+  @bot.on_message(filters.command("ban") & filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
+  async def admin_ban_user_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
+
+    if user_details is None:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        reply_to_message_id = message.id,
+        text = "**Error: User record not found, Please make sure that the user started the bot before.**"
+      )
+      return
+
+    if user_details['banned']:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        text = f"**User is already banned**"
+      )
+      return
+
+    # Send Admin Ban Acknowledgement Message
+    await Env.MONGO.biltudas1bot.userList.update_one({'ID': user_details['ID']}, {'$set': {'banned': True}})
+    await client.send_message(
+      chat_id = int(Env.GROUP_ID),
+      message_thread_id = message.message_thread_id,
+      text = f"**User Banned: {user_details['Name']} ({user_details['ID']})**"
+    )
+
+    # Store lastPing time to database
+    lastPing = dateutil.parser.parse(message.date.isoformat())
+    await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
+
+
+  @bot.on_message(filters.command("unban") & filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
+  async def admin_unban_user_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
+
+    if user_details is None:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        reply_to_message_id = message.id,
+        text = "**Error: User record not found, Please make sure that the user started the bot before.**"
+      )
+      return
+
+    if not user_details['banned']:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        text = f"**User already Unbanned**"
+      )
+      return
+
+    # Send Admin Unban Acknowledgement Message
+    await Env.MONGO.biltudas1bot.userList.update_one({'ID': user_details['ID']}, {'$set': {'banned': False}})
+    await client.send_message(
+      chat_id = int(Env.GROUP_ID),
+      message_thread_id = message.message_thread_id,
+      text = f"**User Unbanned: {user_details['Name']} ({user_details['ID']})**"
+    )
+
+    # Store lastPing time to database
+    lastPing = dateutil.parser.parse(message.date.isoformat())
+    await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
+
+
   @bot.on_message(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
   async def admin_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
     user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
@@ -189,36 +289,6 @@ async def personal_message(bot: pyrogram.client.Client, Env):
     )
 
 
-  @bot.on_edited_message(filters.private & filters.create(lambda a, b, msg: str(msg.from_user.id) not in Env.ADMIN))
-  async def user_edited_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
-    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'ID': message.chat.id}, {'_id': False})
-    # If user data is not available
-    if user_details is None:
-      await client.send_message(
-        chat_id = message.chat.id,
-        text = "Something Went Wrong, Please use /start again"
-      )
-      return
-
-    if user_details["banned"]:
-      return
-
-    if user_details["topicID"] is None:
-      return
-
-    # Edit message on the Admin Side
-    forward_msg_id = int(user_details["messageIDList"][str(message.id)])
-    await client.edit_message_text(
-      chat_id = int(Env.GROUP_ID),
-      message_id = forward_msg_id,
-      text = message.text
-    )
-
-    # Store data in database
-    lastPing = dateutil.parser.parse(message.date.isoformat())
-    await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.chat.id}, {'$set': {'lastPing': lastPing}})
-
-
   @bot.on_edited_message(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
   async def admin_edited_message_hander(client: pyrogram.client.Client, message: pyrogram.types.Message):
     user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
@@ -254,38 +324,3 @@ async def personal_message(bot: pyrogram.client.Client, Env):
     lastPing = dateutil.parser.parse(message.date.isoformat())
     await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
 
-
-  @bot.on_deleted_messages(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
-  async def admin_delete_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
-    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
-
-    if user_details is None:
-      await client.send_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = message.message_thread_id,
-        reply_to_message_id = message.id,
-        text = "**Error: User record not found, Please make sure that the user started the bot before.**"
-      )
-      return
-
-    if user_details["blocked"]:
-      await client.send_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = message.message_thread_id,
-        reply_to_message_id = message.id,
-        text = f"**Error: User blocked the bot, so Deleting Message is not Possible.**"
-      )
-      return
-      
-    uid = user_details["ID"]
-
-    # Edit message on the User Side
-    delete_msg_id = int(bidict(user_details["messageIDList"]).inverse[str(message.id)])
-    await client.delete_messages(
-      chat_id = int(uid),
-      message_ids = delete_msg_id
-    )
-
-    # Store lastPing time to database
-    lastPing = dateutil.parser.parse(message.date.isoformat())
-    await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
