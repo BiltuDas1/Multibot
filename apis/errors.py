@@ -22,7 +22,10 @@ class Error(Exception):
         13: "OWNER_USERNAME Environment can't be empty",
         14: "OWNER_USERNAME is invalid",
         15: "MONGO_URI Environment can't be empty",
-        16: "MONGO_URI contains invalid URI, Please provide the correct URI"
+        16: "MONGO_URI contains invalid URI, Please provide the correct URI",
+        17: "Invalid CACHE value, it only can be true, false, yes, no",
+        18: "DUMP_CHAT Environment can't be empty when CACHE is enabled",
+        19: "DUMP_CHAT Environment have invalid ID, Please Provide the correct one and try again"
     }
 
     __ERR_CODE_LIST = {
@@ -42,7 +45,10 @@ class Error(Exception):
         "NO_OWNER_USERNAME": 13,
         "INVALID_OWNER_USERNAME": 14,
         "NO_MONGO_URI": 15,
-        "INVALID_MONGO_URI": 16
+        "INVALID_MONGO_URI": 16,
+        "INVALID_CACHE": 17,
+        "NO_DUMP_CHAT_ID": 18,
+        "INVALID_DUMP_CHAT_ID": 19
     }
 
     def __init__(self, ERR_CODE: 'str', MSG: 'str'=None):

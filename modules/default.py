@@ -256,6 +256,12 @@ async def execute(bot: 'pyrogram.client.Client', Env):
               text = "Restart 🔄",
               callback_data = "power_reset"
             )
+          ],
+          [
+            types.InlineKeyboardButton(
+              text = "Close",
+              callback_data = "delete_message"
+            )
           ]
         ]
       )
@@ -315,7 +321,8 @@ async def execute(bot: 'pyrogram.client.Client', Env):
     if str(callback_query.from_user.id) in Env.ADMIN:
       await client.answer_callback_query(
         callback_query_id = callback_query.id,
-        text = "The bot is shutting down, Please check the server Console Panel for more information."
+        text = "The bot is shutting down, Please check the server Console Panel for more information.",
+        show_alert = True
       )
       await client.delete_messages(
         chat_id = callback_query.from_user.id,

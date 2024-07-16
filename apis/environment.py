@@ -22,6 +22,19 @@ class Environment:
     self.MONGO_URI: 'str' = os.getenv("MONGO_URI")
     self.MONGO = None  # Automatically MongoClient Object will be replaced
     self.PYTHON_VERSION = platform.python_version()
+    self.DUMP_CHAT = os.getenv("DUMP_CHAT")
+
+    # If Cache Enabled
+    CACHE = os.getenv("CACHE")
+    if CACHE is None:
+      self.CACHE_ENABLED = False
+    else:
+      if CACHE in ("yes", "true"):
+        self.CACHE_ENABLED = True
+      elif CACHE in ("no", "false"):
+        self.CACHE_ENABLED = False
+      else:
+        raise Error("INVALID_CACHE")
 
     # Get bot version
     with open('version', 'r') as v:
@@ -39,7 +52,7 @@ class Environment:
     self.RESTARTED = False  # Flag tells if the bot is restarted or started directely
     self.RESTARTED_BY_USER: 'int' = None  # User who restarted the bot
 
-    self.__test_data() # For testing the Environments
+    self.__test_data()  # For testing the Environments
 
 
   def __test_data(self):
@@ -103,3 +116,12 @@ class Environment:
 
     if re.match("^mongodb\+srv:\/\/.+:.+@[\w\-\.]+\/?$", self.MONGO_URI) is None:
       raise Error('INVALID_MONGO_URI')
+
+    # Checks for Dump Chat ID
+    if self.CACHE_ENABLED:
+      if self.DUMP_CHAT is None:
+        raise Error('NO_DUMP_CHAT_ID')
+
+    if self.DUMP_CHAT is not None:
+      if re.match("^-100\d+$", self.DUMP_CHAT) is None:
+        raise Error('INVALID_DUMP_CHAT_ID')
