@@ -51,6 +51,7 @@ class Environment:
     self.CACHED_MODULE_OPTIONS: 'list[list]' = None
     self.RESTARTED = False  # Flag tells if the bot is restarted or started directely
     self.RESTARTED_BY_USER: 'int' = None  # User who restarted the bot
+    self.REFRESH_TIME = 2  # Seconds to wait to Refresh the download Progress
 
     self.__test_data()  # For testing the Environments
 
