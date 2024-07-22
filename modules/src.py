@@ -356,7 +356,7 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
         await smsg.edit_text(
           text = f"**Error:** __{e}__"
         )
-        return None
+        return False
       
       else:
         # Delete Status Message
@@ -368,12 +368,10 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
 
         # If DUMP_CHAT is Set
         if Env.DUMP_CHAT:
-          await bot.copy_message(
+          await output_msg.copy(
             chat_id = int(Env.GROUP_ID),
             message_thread_id = message.message_thread_id,
-            reply_to_message_id = message.id,
-            from_chat_id = int(Env.DUMP_CHAT),
-            message_id = output_msg.id
+            reply_to_message_id = message.id
           )
 
         # If CACHE is Enabled then store the message info into Database
@@ -387,6 +385,8 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
               }
             }
           )
+
+        return True
 
 
   def eta_calculate(new_file_size: 'int', total_file_size: 'int', old_file_size: 'int', download_time: 'int') -> tuple['int', 'str']:
@@ -644,22 +644,18 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
     )
 
     if downloaded_file is None:
-      await bot.edit_message_text(
-        chat_id = smsg.chat.id,
-        message_id = smsg.id,
+      await smsg.edit_text(
         text = "**Error: Unable to download the message at this moment, Please try again later.**"
       )
       return
     elif os.path.exists(downloaded_file[1]):
-      await bot.edit_message_text(
-        chat_id = smsg.chat.id,
-        message_id = smsg.id,
+      await smsg.edit_text(
         text = "**Error: The filename already exist into the system.**"
       )
       return
 
     # Starting Upload
-    await uploading_file(
+    uploaded: bool = await uploading_file(
       msg_type = msg_type,
       msg = msg,
       message = message,
@@ -668,6 +664,8 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       encoded_file_path = downloaded_file[0]
     )
 
+    if not uploaded:
+      print("Task Failed")
 
 
   @bot.on_message(filters.command("join") & filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id == 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
