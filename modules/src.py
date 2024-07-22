@@ -549,7 +549,7 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
     return None
 
 
-  async def handle_private_chat(client: pyrogram.client.Client, message: pyrogram.types.Message, chatid: int | str, msgid: int, private = True):
+  async def handle_private_chat(message: pyrogram.types.Message, chatid: int | str, msgid: int, private = True):
     if private:
       chatid = int(f"-100{chatid}")
 
@@ -668,6 +668,144 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       print("Task Failed")
 
 
+  async def process(url: str, message: pyrogram.types.Message):
+    """
+    Function to handle saving message based on the url
+    Can handle Public Chats or Private One
+    Parameters:
+      url: Message URL (e.g. https://t.me/c/2058213468/40)
+      message: The Message which contains the url (Will be used for replying)
+    """
+    if pattern_url := re.search("^(https|http):\/\/(t.me|telegram.me)\/c\/(\d+)\/(\d+)\/?(\?single)?$", url):
+      # Match Private Chats
+      chat_name = int(pattern_url.group(3))
+      chat_message_id = int(pattern_url.group(4))
+
+      try:
+        await handle_private_chat(
+          message = message,
+          chatid = chat_name,
+          msgid = chat_message_id
+        )
+      except pyrogram.errors.UsernameNotOccupied:
+        await bot.send_message(
+          chat_id = int(Env.GROUP_ID),
+          message_thread_id = message.id,
+          reply_to_message_id = message.id,
+          text = "**Error: The chat doesn't seem to be exist**"
+        )
+      except pyrogram.errors.ChannelInvalid:
+        await bot.send_message(
+          chat_id = int(Env.GROUP_ID),
+          message_thread_id = message.id,
+          reply_to_message_id = message.id,
+          text = "**Error: The chat is not accessible, please send the invitation link of the chat and then try again.**"
+        )
+      except Exception as e:
+        await bot.send_message(
+          chat_id = int(Env.GROUP_ID),
+          message_thread_id = message.id,
+          reply_to_message_id = message.id,
+          text = f"**Error:** __{e}__"
+        )
+
+    elif pattern_url := re.search("^(https|http):\/\/(t.me|telegram.me)\/(\D[\w]{4,31})\/(\d+)\/?(\?single)?$", url):
+      # Match Public Chats
+      chat_name = str(pattern_url.group(3))
+      chat_message_id = int(pattern_url.group(4))
+
+      try:
+        if Env.DUMP_CHAT:
+          if Env.CACHE_ENABLED:
+            cached_data = await Env.MONGO.biltudas1bot.cachedFiles.find_one(
+              {'chat_id': f"https://t.me/{chat_name}", 'message_id': int(chat_message_id)}, 
+              {'_id': False}
+            )
+          else:
+            cached_data = None
+
+          if cached_data is not None:
+            # When Cache hit occurs
+            # Copy from DUMP_CHAT to GROUP_ID
+            await bot.copy_message(
+              chat_id = int(Env.GROUP_ID),
+              message_thread_id = message.message_thread_id,
+              reply_to_message_id = message.id,
+              from_chat_id = int(Env.DUMP_CHAT),
+              message_id = int(cached_data['cached_data']['message_id'])
+            )
+          else:
+              # When Cache Miss occurs
+              # Copy to DUMP_CHAT
+              cached = await bot.copy_message(
+                chat_id = int(Env.DUMP_CHAT),
+                from_chat_id = f"https://t.me/{chat_name}",
+                message_id = int(chat_message_id)
+              )
+              
+              # Copy from DUMP_CHAT to GROUP_ID
+              await cached.copy(
+                chat_id = int(Env.GROUP_ID),
+                message_thread_id = message.message_thread_id,
+                reply_to_message_id = message.id,
+              )
+
+              # Store Cache Information in Database
+              if Env.CACHE_ENABLED:
+                await Env.MONGO.biltudas1bot.cachedFiles.insert_one(
+                  {
+                    "chat_id": f"https://t.me/{chat_name}",
+                    "message_id": chat_message_id,
+                    "cached_data": {
+                      "message_id": cached.id
+                    }
+                  }
+                )
+        else:
+          # Copy to GROUP_ID
+          await bot.copy_message(
+            chat_id = int(Env.GROUP_ID),
+            message_thread_id = message.message_thread_id,
+            reply_to_message_id = message.id,
+            from_chat_id = f"https://t.me/{chat_name}",
+            message_id = chat_message_id
+          )
+
+      except pyrogram.errors.UsernameNotOccupied:
+        await bot.send_message(
+          chat_id = int(Env.GROUP_ID),
+          message_thread_id = message.message_thread_id,
+          reply_to_message_id = message.id,
+          text = "**Error: The chat doesn't exist**"
+        )
+      except Exception as e:
+        # Handle Public Chats which don't allow copying Content
+        try:
+          await handle_private_chat(
+            message = message, 
+            chatid = chat_name, 
+            msgid = chat_message_id,
+            private = False
+          )
+        except Exception as e1:
+          await bot.send_message(
+            chat_id = int(Env.GROUP_ID),
+            message_thread_id = message.id,
+            reply_to_message_id = message.id,
+            text = f"**Error:** __{e1}__"
+          )
+    
+    else:
+      # Invalid URL
+      await bot.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        reply_to_message_id = message.id,
+        text = "**Invalid Message URL**"
+      )
+
+
+
   @bot.on_message(filters.command("join") & filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id == 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
   async def join_chat(client: pyrogram.client.Client, message: pyrogram.types.Message):
     try:
@@ -742,135 +880,67 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
         text = "**Error: Please Provide a Message Link**"
       )
       return
+    
+    # Starts The Saving Process
+    await process(
+      url = url,
+      message = message
+    )
 
-    if pattern_url := re.search("^(https|http):\/\/(t.me|telegram.me)\/c\/(\d+)\/(\d+)\/?(\?single)?$", url):
-      # Match Private Chats
-      chat_name = int(pattern_url.group(3))
-      chat_message_id = int(pattern_url.group(4))
 
-      try:
-        await handle_private_chat(
-          client = client,
-          message = message,
-          chatid = chat_name,
-          msgid = chat_message_id
-        )
-      except pyrogram.errors.UsernameNotOccupied:
-        await client.send_message(
-          chat_id = int(Env.GROUP_ID),
-          message_thread_id = message.id,
-          reply_to_message_id = message.id,
-          text = "**Error: The chat doesn't seem to be exist**"
-        )
-      except pyrogram.errors.ChannelInvalid:
-        await client.send_message(
-          chat_id = int(Env.GROUP_ID),
-          message_thread_id = message.id,
-          reply_to_message_id = message.id,
-          text = "**Error: The chat is not accessible, please send the invitation link of the chat and then try again.**"
-        )
-      except Exception as e:
-        await client.send_message(
-          chat_id = int(Env.GROUP_ID),
-          message_thread_id = message.id,
-          reply_to_message_id = message.id,
-          text = f"**Error:** __{e}__"
-        )
+  @bot.on_message(filters.command("batch") & filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id == 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
+  async def src_batch_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    try:
+      urls = str(message.text).split(" ", 2)[1:]
+      start_msg = re.search("^(https|http):\/\/(t.me|telegram.me)\/(c\/\d+|\D[\w]{4,31})\/(\d+)\/?(\?single)?$", urls[0])
+      end_msg = re.search("^(https|http):\/\/(t.me|telegram.me)\/(c\/\d+|\D[\w]{4,31})\/(\d+)\/?(\?single)?$", urls[1])
 
-    elif pattern_url := re.search("^(https|http):\/\/(t.me|telegram.me)\/(\D[\w]{4,31})\/(\d+)\/?(\?single)?$", url):
-      # Match Public Chats
-      chat_name = str(pattern_url.group(3))
-      chat_message_id = int(pattern_url.group(4))
-
-      try:
-        if Env.DUMP_CHAT:
-          if Env.CACHE_ENABLED:
-            cached_data = await Env.MONGO.biltudas1bot.cachedFiles.find_one(
-              {'chat_id': f"https://t.me/{chat_name}", 'message_id': int(chat_message_id)}, 
-              {'_id': False}
-            )
-          else:
-            cached_data = None
-
-          if cached_data is not None:
-            # When Cache hit occurs
-            # Copy from DUMP_CHAT to GROUP_ID
-            await client.copy_message(
-              chat_id = int(Env.GROUP_ID),
-              message_thread_id = message.message_thread_id,
-              reply_to_message_id = message.id,
-              from_chat_id = int(Env.DUMP_CHAT),
-              message_id = int(cached_data['cached_data']['message_id'])
-            )
-          else:
-              # When Cache Miss occurs
-              # Copy to DUMP_CHAT
-              cached = await client.copy_message(
-                chat_id = int(Env.DUMP_CHAT),
-                from_chat_id = f"https://t.me/{chat_name}",
-                message_id = int(chat_message_id)
-              )
-              
-              # Copy from DUMP_CHAT to GROUP_ID
-              await client.copy_message(
-                chat_id = int(Env.GROUP_ID),
-                message_thread_id = message.message_thread_id,
-                reply_to_message_id = message.id,
-                from_chat_id = int(Env.DUMP_CHAT),
-                message_id = cached.id
-              )
-
-              # Store Cache Information in Database
-              if Env.CACHE_ENABLED:
-                await Env.MONGO.biltudas1bot.cachedFiles.insert_one(
-                  {
-                    "chat_id": f"https://t.me/{chat_name}",
-                    "message_id": chat_message_id,
-                    "cached_data": {
-                      "message_id": cached.id
-                    }
-                  }
-                )
-        else:
-          # Copy to GROUP_ID
-          await client.copy_message(
-            chat_id = int(Env.GROUP_ID),
-            message_thread_id = message.message_thread_id,
-            reply_to_message_id = message.id,
-            from_chat_id = f"https://t.me/{chat_name}",
-            message_id = chat_message_id
-          )
-
-      except pyrogram.errors.UsernameNotOccupied:
+      if start_msg is None or end_msg is None:
         await client.send_message(
           chat_id = int(Env.GROUP_ID),
           message_thread_id = message.message_thread_id,
           reply_to_message_id = message.id,
-          text = "**Error: The chat doesn't exist**"
+          text = "**Error: Invalid URL, Please provide a valid message url**"
         )
-      except Exception as e:
-        # Handle Public Chats which don't allow copying Content
-        try:
-          await handle_private_chat(
-            client = client,
-            message = message, 
-            chatid = chat_name, 
-            msgid = chat_message_id,
-            private = False
-          )
-        except Exception as e1:
-          await client.send_message(
-            chat_id = int(Env.GROUP_ID),
-            message_thread_id = message.id,
-            reply_to_message_id = message.id,
-            text = f"**Error:** __{e1}__"
-          )
-    
-    else:
-      # Invalid URL
+        return
+    except IndexError:
       await client.send_message(
         chat_id = int(Env.GROUP_ID),
         message_thread_id = message.message_thread_id,
         reply_to_message_id = message.id,
-        text = "**Invalid Message URL**"
+        text = "**Error: Please Provide a Message Link**"
       )
+      return
+
+    start_chat_name = start_msg.group(3)
+    start_msg_id = int(start_msg.group(4))
+    end_chat_name = end_msg.group(3)
+    end_msg_id = int(end_msg.group(4))
+
+    # If Two links have different chat ID
+    if start_chat_name != end_chat_name:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        reply_to_message_id = message.id,
+        text = "**Error: Two Links have different chatID**"
+      )
+      return
+
+    # If end message id is less than start message id
+    if end_msg_id < start_msg_id:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        reply_to_message_id = message.id,
+        text = "**Error: End messageID can't be before than start messageID**"
+      )
+      return
+
+    # Batch Saving
+    for msg_id in range(start_msg_id, end_msg_id + 1):
+      await process(
+        url = f"https://t.me/{start_chat_name}/{msg_id}",
+        message = message
+      )
+      await asyncio.sleep(Env.REFRESH_TIME)
