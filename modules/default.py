@@ -4,6 +4,8 @@ import asyncio
 import json
 import os
 import signal
+import psutil
+import time
 from datetime import datetime
 from pyrogram import filters, types
 
@@ -12,6 +14,58 @@ async def execute(bot: 'pyrogram.client.Client', Env):
   """
   Function to enable global rule of the bot
   """
+  async def collecting_machine_stats() -> str:
+    def file_size_converter(size: 'int') -> str:
+      """
+      Converts Bytes to Human Readable Size
+      """
+      i = 0
+      temp_size = size
+
+      while temp_size > 1023:
+        temp_size /= 1024
+        i += 1
+
+      temp_size = float(f"{temp_size:.2f}")
+      return f"{temp_size} {Env.UNITS[i]}"
+
+    def seconds_elapsed() -> int:
+      return int(time.time() - psutil.boot_time())
+
+    def convert_seconds(seconds: int) -> str:
+      # Define the time units in seconds
+      units = [
+          ("year", 60 * 60 * 24 * 365),
+          ("month", 60 * 60 * 24 * 30),
+          ("day", 60 * 60 * 24),
+          ("hour", 60 * 60),
+          ("minute", 60),
+          ("second", 1)
+      ]
+
+      # Dictionary to store the result
+      result = {}
+
+      # Loop through each time unit
+      for name, count in units:
+          if seconds >= count:
+              value = seconds // count
+              result[name] = value
+              seconds %= count
+
+      # Create the result string
+      result_str = ' '.join(f"{value} {name}{'s' if value > 1 else ''}" for name, value in result.items())
+      return result_str
+
+
+    disk = psutil.disk_usage('/')
+    ram = psutil.virtual_memory()
+
+    final_msg = f"<u>Bot Stats:</u>\n**Uptime: **{convert_seconds(seconds_elapsed())}\n**Disk Total: **{disk.total / (2**30):.2f} GiB\n**Disk Used: **{disk.used / (2**30):.2f} GiB ({disk.percent:.2f}% used)\n**RAM Total: **{ram.total / (2**30):.2f} GiB\n**RAM Used: **{ram.used / (2**30):.2f} GiB ({ram.percent:.2f}% used)\n\n**Downloaded: **{file_size_converter(Env.DOWNLOADED)}\n**Uploaded: **{file_size_converter(Env.UPLOADED)}"
+
+    return final_msg
+
+
   async def store_user_info(user: 'pyrogram.types.User', lastPing: 'int'):
     user_record = await Env.MONGO.biltudas1bot.userList.find_one({'ID': user.id})
     
@@ -241,26 +295,34 @@ async def execute(bot: 'pyrogram.client.Client', Env):
 
   @bot.on_message(filters.private & filters.command("stats") & filters.user([int(uid) for uid in Env.ADMIN]))
   async def print_stats(client: 'pyrogram.client.Client', message: 'pyrogram.types.Message'):
-    def file_size_converter(size: 'int') -> 'str':
-      """
-      Converts Bytes to Human Readable Size
-      """
-      i = 0
-      temp_size = size
-
-      while temp_size > 1023:
-        temp_size /= 1024
-        i += 1
-
-      temp_size = float(f"{temp_size:.2f}")
-      return f"{temp_size} {Env.UNITS[i]}"
-
-
-    # Send the stats to User
-    await client.send_message(
+    server_info = await client.send_message(
       chat_id = message.chat.id,
       reply_to_message_id = message.id,
-      text = f"<u>Bot stats:</u>\n\n**Downloaded: **{file_size_converter(Env.DOWNLOADED)}\n**Uploaded: **{file_size_converter(Env.UPLOADED)}"
+      text = "__Gathering Information...__"
+    )
+
+    await asyncio.sleep(Env.REFRESH_TIME)
+    msg_body = await collecting_machine_stats()
+
+    # Send the stats to User
+    await server_info.edit_text(
+      text = msg_body,
+      reply_markup = types.InlineKeyboardMarkup(
+        [
+          [
+            types.InlineKeyboardButton(
+              text = "Refresh 🔄",
+              callback_data = "refresh_stats"
+            )
+          ],
+          [
+            types.InlineKeyboardButton(
+              text = "Close",
+              callback_data = "delete_message"
+            )
+          ]
+        ]
+      )
     )
 
 
@@ -292,6 +354,37 @@ async def execute(bot: 'pyrogram.client.Client', Env):
         ]
       )
     )
+
+
+  @bot.on_callback_query(filters.regex("^refresh_stats$"))
+  async def refresh_stats_machine(client: pyrogram.client.Client, callback_query: pyrogram.types.CallbackQuery):
+    if str(callback_query.from_user.id) in Env.ADMIN:
+      await callback_query.message.edit_text(
+        text = "__Gathering Information...__"
+      )
+
+      await asyncio.sleep(Env.REFRESH_TIME)
+      msg_body = await collecting_machine_stats()
+
+      await callback_query.message.edit_text(
+        text = msg_body,
+        reply_markup = types.InlineKeyboardMarkup(
+          [
+            [
+              types.InlineKeyboardButton(
+                text = "Refresh 🔄",
+                callback_data = "refresh_stats"
+              )
+            ],
+            [
+              types.InlineKeyboardButton(
+                text = "Close",
+                callback_data = "delete_message"
+              )
+            ]
+          ]
+        )
+      )
 
 
   @bot.on_callback_query(filters.regex("^(delete_message|toggle_[A-Z0-9_]+)$"))
