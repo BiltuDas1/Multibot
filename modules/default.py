@@ -230,12 +230,38 @@ async def execute(bot: 'pyrogram.client.Client', Env):
 
       await client.send_message(
         chat_id = message.from_user.id,
+        reply_to_message_id = message.id,
         text = f"Bot Version: `{version}`"
       )
 
     # Store user info in database
     lastPing = dateutil.parser.parse(message.date.isoformat())
     await store_user_info(message.from_user, lastPing)
+
+
+  @bot.on_message(filters.private & filters.command("stats") & filters.user([int(uid) for uid in Env.ADMIN]))
+  async def print_stats(client: 'pyrogram.client.Client', message: 'pyrogram.types.Message'):
+    def file_size_converter(size: 'int') -> 'str':
+      """
+      Converts Bytes to Human Readable Size
+      """
+      i = 0
+      temp_size = size
+
+      while temp_size > 1023:
+        temp_size /= 1024
+        i += 1
+
+      temp_size = float(f"{temp_size:.2f}")
+      return f"{temp_size} {Env.UNITS[i]}"
+
+
+    # Send the stats to User
+    await client.send_message(
+      chat_id = message.chat.id,
+      reply_to_message_id = message.id,
+      text = f"<u>Bot stats:</u>\n\n**Downloaded: **{file_size_converter(Env.DOWNLOADED)}\n**Uploaded: **{file_size_converter(Env.UPLOADED)}"
+    )
 
 
   @bot.on_message(filters.private & filters.command("power") & filters.user([int(uid) for uid in Env.ADMIN]))
@@ -424,3 +450,20 @@ async def execute(bot: 'pyrogram.client.Client', Env):
 
     Env.HELP_ADMIN_MESSAGE += help_str
     Env.HELP_USER_MESSAGE += help_str_user
+
+
+  # Loading Stats
+  stats = await Env.MONGO.biltudas1bot.botstats.find_one({}, {'_id': False})
+  if stats:
+    if 'downloaded' in stats:
+      Env.DOWNLOADED = stats['downloaded']
+
+    if 'uploaded' in stats:
+      Env.UPLOADED = stats['uploaded']
+  else:
+    await Env.MONGO.biltudas1bot.botstats.insert_one(
+      {
+        'downloaded': 0,
+        'uploaded': 0
+      }
+    )

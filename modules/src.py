@@ -10,6 +10,33 @@ from pyrogram import filters
 
 async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram.client.Client, Env):
 
+  async def get_file_size(message: pyrogram.types.Message) -> int:
+    """
+    Getting attached file size from a message
+    Returns size in bytes
+    """
+    msg_type = await get_message_type(message)
+    size = 0
+
+    match msg_type:
+      case "Document":
+        size = message.document.file_size
+      case "Video":
+        size = message.video.file_size
+      case "Animation":
+        size = message.animation.file_size
+      case "Sticker":
+        size = message.sticker.file_size
+      case "Voice":
+        size = message.voice.file_size
+      case "Audio":
+        size = message.audio.file_size
+      case "Photo":
+        size = message.photo.file_size
+
+    return size
+
+
   async def downloading_file(downloadable_msg: pyrogram.types.Message, message: pyrogram.types.Message) -> tuple[str, str]:
     """
     Function to Handle downloading file
@@ -412,7 +439,6 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
     """
     Converts Bytes to Human Readable Size
     """
-    units = ("B", "KiB", "MiB", "GiB", "TiB", "EiB", "PiB")
     i = 0
     temp_size = size
 
@@ -421,7 +447,7 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       i += 1
 
     temp_size = float(f"{temp_size:.2f}")
-    return f"{temp_size} {units[i]}"
+    return f"{temp_size} {Env.UNITS[i]}"
 
 
   async def if_uploadable(message: pyrogram.types.Message, msg_type: str) -> 'tuple[bool, str]':
@@ -638,10 +664,17 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       return
 
     # Starting Download
+    size_of_file = await get_file_size(msg)
+    Env.DOWNLOADED += size_of_file
     downloaded_file: tuple[str, str] = await downloading_file(
       downloadable_msg = msg,
       message = smsg
     )
+
+    # Storing Download Details on Database
+    await Env.MONGO.biltudas1bot.botstats.update_one({}, {
+      '$set': {'downloaded': Env.DOWNLOADED}
+    })
 
     if downloaded_file is None:
       await smsg.edit_text(
@@ -655,6 +688,7 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       return
 
     # Starting Upload
+    Env.UPLOADED += size_of_file
     uploaded: bool = await uploading_file(
       msg_type = msg_type,
       msg = msg,
@@ -666,6 +700,12 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
 
     if not uploaded:
       print("Task Failed")
+      return
+
+    # Storing Upload Details on Database
+    await Env.MONGO.biltudas1bot.botstats.update_one({}, {
+      '$set': {'uploaded': Env.UPLOADED}
+    })
 
 
   async def process(url: str, message: pyrogram.types.Message):
