@@ -37,7 +37,7 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
     return size
 
 
-  async def downloading_file(downloadable_msg: pyrogram.types.Message, message: pyrogram.types.Message) -> tuple[str, str]:
+  async def downloading_file(downloadable_msg: pyrogram.types.Message, message: pyrogram.types.Message, by_user: int) -> tuple[str, str]:
     """
     Function to Handle downloading file
     When a file is downloaded Successfully, then this function returns a tuple of (current_download_path, actual_download_path)
@@ -60,6 +60,12 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       percentage = current_file_size * 100 / total_file_size
 
       try:
+        # If the userID is not into the Active user list then stop the downloading
+        if by_user not in Env.ACTIVE_USERS:
+          await message.delete()
+          await bot.stop_transmission()
+          return
+
         # Calculate ETA and processing Speed
         stat['total_time'] = int(int(time.time()) - stat['start_time_download'])
         eta, process_speed = eta_calculate(
@@ -99,7 +105,15 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
         # Update message
         msg_txt = f"**Downloading**: {percentage:.2f}% of 100%\n\n {progress_bar} \n\n**Size**: {size_msg}\n\n**Speed**: {process_speed}\n\n**ETA**: {eta_time}\n\n**Elapse Time**: {elapse_time}"
         await message.edit_text(
-          text = msg_txt
+          text = msg_txt,
+          reply_markup = pyrogram.types.InlineKeyboardMarkup(
+            [[
+                pyrogram.types.InlineKeyboardButton(
+                  text = "Cancel",
+                  callback_data = f"cancel_task_{by_user}"
+                )
+            ]]
+          )
         )
         await asyncio.sleep(Env.REFRESH_TIME)
       except Exception:
@@ -138,7 +152,7 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
         return (new_location, downloaded_path)
 
 
-  async def uploading_file(msg_type: str, msg: pyrogram.types.Message, message: pyrogram.types.Message, file_path: str, encoded_file_path: str, smsg: pyrogram.types.Message):
+  async def uploading_file(msg_type: str, msg: pyrogram.types.Message, message: pyrogram.types.Message, file_path: str, encoded_file_path: str, smsg: pyrogram.types.Message, by_user: int):
     """
     Function to Handle uploading files
     """
@@ -159,6 +173,12 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       percentage = current_file_size * 100 / total_file_size
 
       try:
+        # If the userID is not into the Active user list then stop the uploading
+        if by_user not in Env.ACTIVE_USERS:
+          await smsg.delete()
+          await bot.stop_transmission()
+          return
+
         # Calculate ETA and processing Speed
         stat['total_time'] = int(int(time.time()) - stat['start_time_download'])
         eta, process_speed = eta_calculate(
@@ -633,11 +653,20 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
 
 
     # Starting download bot message
+    Env.ACTIVE_USERS.add(message.from_user.id)
     smsg = await bot.send_message(
       chat_id = int(Env.GROUP_ID),
       reply_to_message_id = message.id,
       message_thread_id = message.message_thread_id,
-      text = '__Starting download...__'
+      text = '__Starting download...__',
+      reply_markup = pyrogram.types.InlineKeyboardMarkup(
+        [[
+            pyrogram.types.InlineKeyboardButton(
+              text = "Cancel",
+              callback_data = f"cancel_task_{message.from_user.id}"
+            )
+        ]]
+      )
     )
 
     # Checking if Message exist into cache
@@ -661,6 +690,7 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       )
 
       await smsg.delete()
+      Env.ACTIVE_USERS.discard(message.from_user.id)
       return
 
     # Starting Download
@@ -668,8 +698,13 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
     Env.DOWNLOADED += size_of_file
     downloaded_file: tuple[str, str] = await downloading_file(
       downloadable_msg = msg,
-      message = smsg
+      message = smsg,
+      by_user = message.from_user.id
     )
+
+    # Check if Download is stopped by the user
+    if message.from_user.id not in Env.ACTIVE_USERS:
+      return
 
     # Storing Download Details on Database
     await Env.MONGO.biltudas1bot.botstats.update_one({}, {
@@ -680,11 +715,13 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       await smsg.edit_text(
         text = "**Error: Unable to download the message at this moment, Please try again later.**"
       )
+      Env.ACTIVE_USERS.discard(message.from_user.id)
       return
     elif os.path.exists(downloaded_file[1]):
       await smsg.edit_text(
         text = "**Error: The filename already exist into the system.**"
       )
+      Env.ACTIVE_USERS.discard(message.from_user.id)
       return
 
     # Starting Upload
@@ -695,8 +732,15 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       message = message,
       smsg = smsg,
       file_path = downloaded_file[1],
-      encoded_file_path = downloaded_file[0]
+      encoded_file_path = downloaded_file[0],
+      by_user = message.from_user.id
     )
+
+    # Check if Upload is stopped by the user
+    if message.from_user.id not in Env.ACTIVE_USERS:
+      return
+
+    Env.ACTIVE_USERS.discard(message.from_user.id)
 
     if not uploaded:
       print("Task Failed")
@@ -984,3 +1028,22 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
         message = message
       )
       await asyncio.sleep(Env.REFRESH_TIME)
+
+
+  @bot.on_callback_query(filters.regex("^cancel_task_\d+$"))
+  async def cancel_task_user(client: pyrogram.client.Client, callback_query: pyrogram.types.CallbackQuery):
+    user_id = callback_query.data[12:]
+    if int(user_id) == callback_query.from_user.id:
+      Env.ACTIVE_USERS.discard(int(user_id))
+
+      await client.answer_callback_query(
+        callback_query_id = callback_query.id,
+        text = "Success: Task stopped",
+        show_alert = True
+      )
+    else:
+      await client.answer_callback_query(
+        callback_query_id = callback_query.id,
+        text = "Error: You can't stop tasks of Other users",
+        show_alert = True
+      )

@@ -53,6 +53,7 @@ class Environment:
     self.RESTARTED_BY_USER: 'int' = None  # User who restarted the bot
     self.REFRESH_TIME = 2  # Seconds to wait to Refresh the download Progress
     self.UNITS = ("B", "KiB", "MiB", "GiB", "TiB", "EiB", "PiB")
+    self.ACTIVE_USERS = set()  # Stores user ID of those whose tasks are running
     self.DOWNLOADED = 0  # Total Downloaded data
     self.UPLOADED = 0  # Total Uploaded data
 
