@@ -588,14 +588,19 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
 
     try:
       msg.text
-      return "Text"
+
+      # To make empty message type as None
+      if msg.text is None:
+        return None
+      else:
+        return "Text"
     except:
       pass
 
     return None
 
 
-  async def handle_private_chat(message: pyrogram.types.Message, chatid: int | str, msgid: int, private = True):
+  async def handle_private_chat(message: pyrogram.types.Message, chatid: int | str, msgid: int, private = True, batch_job = False):
     if private:
       chatid = int(f"-100{chatid}")
 
@@ -604,11 +609,12 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
 
     # If the type is invalid
     if msg_type is None:
-      await bot.send_message(
-        chat_id = int(Env.GROUP_ID),
-        reply_to_message_id = message.id,
-        text = "**Error: Invalid Message, Only Text, Document, Audio, Video, Animation, Sticker, Voice, Photo are supported**"
-      )
+      if not batch_job:
+        await bot.send_message(
+          chat_id = int(Env.GROUP_ID),
+          reply_to_message_id = message.id,
+          text = "**Error: Invalid Message, Only Text, Document, Audio, Video, Animation, Sticker, Voice, Photo are supported**"
+        )
       return
 
     # Check if the message is uploadable
@@ -653,7 +659,6 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
 
 
     # Starting download bot message
-    Env.ACTIVE_USERS.add(message.from_user.id)
     smsg = await bot.send_message(
       chat_id = int(Env.GROUP_ID),
       reply_to_message_id = message.id,
@@ -690,7 +695,6 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       )
 
       await smsg.delete()
-      Env.ACTIVE_USERS.discard(message.from_user.id)
       return
 
     # Starting Download
@@ -715,13 +719,11 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       await smsg.edit_text(
         text = "**Error: Unable to download the message at this moment, Please try again later.**"
       )
-      Env.ACTIVE_USERS.discard(message.from_user.id)
       return
     elif os.path.exists(downloaded_file[1]):
       await smsg.edit_text(
         text = "**Error: The filename already exist into the system.**"
       )
-      Env.ACTIVE_USERS.discard(message.from_user.id)
       return
 
     # Starting Upload
@@ -740,8 +742,6 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
     if message.from_user.id not in Env.ACTIVE_USERS:
       return
 
-    Env.ACTIVE_USERS.discard(message.from_user.id)
-
     if not uploaded:
       print("Task Failed")
       return
@@ -752,7 +752,7 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
     })
 
 
-  async def process(url: str, message: pyrogram.types.Message):
+  async def process(url: str, message: pyrogram.types.Message, batch_job = False):
     """
     Function to handle saving message based on the url
     Can handle Public Chats or Private One
@@ -769,7 +769,8 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
         await handle_private_chat(
           message = message,
           chatid = chat_name,
-          msgid = chat_message_id
+          msgid = chat_message_id,
+          batch_job = batch_job
         )
       except pyrogram.errors.UsernameNotOccupied:
         await bot.send_message(
@@ -869,7 +870,8 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
             message = message, 
             chatid = chat_name, 
             msgid = chat_message_id,
-            private = False
+            private = False,
+            batch_job = batch_job
           )
         except Exception as e1:
           await bot.send_message(
@@ -954,6 +956,16 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
 
   @bot.on_message(filters.command("save") & filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id == 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
   async def save_content(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    # Checks if the current user is already saving some content
+    if message.from_user.id in Env.ACTIVE_USERS:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        reply_to_message_id = message.id,
+        text = "**Task Error: You can't add a task when another task is running**"
+      )
+      return
+    
     try:
       url = str(message.text).split(" ", 1)[1]
     except IndexError:
@@ -966,14 +978,26 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       return
     
     # Starts The Saving Process
+    Env.ACTIVE_USERS.add(message.from_user.id)
     await process(
       url = url,
       message = message
     )
+    Env.ACTIVE_USERS.discard(message.from_user.id)
 
 
   @bot.on_message(filters.command("batch") & filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id == 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
   async def src_batch_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    # Checks if the current user is already saving some content
+    if message.from_user.id in Env.ACTIVE_USERS:
+      await client.send_message(
+        chat_id = int(Env.GROUP_ID),
+        message_thread_id = message.message_thread_id,
+        reply_to_message_id = message.id,
+        text = "**Task Error: You can't add a task when another task is running**"
+      )
+      return
+
     try:
       urls = str(message.text).split(" ", 2)[1:]
       start_msg = re.search("^(https|http):\/\/(t.me|telegram.me)\/(c\/\d+|\D[\w]{4,31})\/(\d+)\/?(\?single)?$", urls[0])
@@ -992,7 +1016,7 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
         chat_id = int(Env.GROUP_ID),
         message_thread_id = message.message_thread_id,
         reply_to_message_id = message.id,
-        text = "**Error: Please Provide a Message Link**"
+        text = "**Error: Please Provide starting and ending Message Link**"
       )
       return
 
@@ -1022,12 +1046,19 @@ async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram
       return
 
     # Batch Saving
+    Env.ACTIVE_USERS.add(message.from_user.id)
     for msg_id in range(start_msg_id, end_msg_id + 1):
+      # Breaks the Loop when User Press Cancel button
+      if message.from_user.id not in Env.ACTIVE_USERS:
+        break
+
       await process(
         url = f"https://t.me/{start_chat_name}/{msg_id}",
-        message = message
+        message = message,
+        batch_job = True
       )
       await asyncio.sleep(Env.REFRESH_TIME)
+    Env.ACTIVE_USERS.discard(message.from_user.id)
 
 
   @bot.on_callback_query(filters.regex("^cancel_task_\d+$"))
