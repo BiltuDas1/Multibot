@@ -356,6 +356,51 @@ async def execute(bot: 'pyrogram.client.Client', Env):
     )
 
 
+  @bot.on_message(filters.private & filters.command("set") & filters.user([int(uid) for uid in Env.ADMIN]))
+  async def set_msg(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    try:
+      text = str(message.text).split(" ", 1)[1]
+    except IndexError:
+      await client.send_message(
+        chat_id = message.chat.id,
+        reply_to_message_id = message.id,
+        text = "**Error: Please Provide a message body to save**"
+      )
+      return
+
+    await Env.MONGO.biltudas1bot.feeds.insert_one({'text': text, 'seen': False})
+
+    await client.send_message(
+      chat_id = message.chat.id,
+      reply_to_message_id = message.id,
+      text = "**Success: Message saved**"
+    )
+
+
+  @bot.on_message(filters.private & filters.command("feed") & filters.user([int(uid) for uid in Env.ADMIN]))
+  async def feed_msg(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    msg = Env.MONGO.biltudas1bot.feeds.aggregate([{'$match': {'seen': False}}, {'$sample': {'size': 1}}])
+
+    async for feed in msg:
+      await client.send_message(
+        chat_id = message.chat.id,
+        reply_to_message_id = message.id,
+        text = f"{feed['text']}"
+      )
+
+      await Env.MONGO.biltudas1bot.feeds.update_one(
+        {'_id': feed['_id']},
+        {'$set': {'seen': True}}
+      )
+      break
+    else:
+      await client.send_message(
+        chat_id = message.chat.id,
+        reply_to_message_id = message.id,
+        text = "**Feed is Empty**"
+      )
+
+
   @bot.on_callback_query(filters.regex("^refresh_stats$"))
   async def refresh_stats_machine(client: pyrogram.client.Client, callback_query: pyrogram.types.CallbackQuery):
     if str(callback_query.from_user.id) in Env.ADMIN:
