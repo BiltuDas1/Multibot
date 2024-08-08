@@ -4,7 +4,7 @@ import dateutil
 from bidict import bidict
 from pyrogram import filters
 
-async def personal_message(bot: pyrogram.client.Client, Env):
+async def execute(bot: pyrogram.client.Client, account: pyrogram.client.Client, Env):
   """
   Function to enable functionality of user to user direct message bot
   """

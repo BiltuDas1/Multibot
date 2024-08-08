@@ -239,7 +239,6 @@ async def execute(bot: 'pyrogram.client.Client', Env):
             callback_data = "toggle_" + name
           )
         )
-
       else:
         items = 2
         modules.append(rows)
@@ -249,12 +248,8 @@ async def execute(bot: 'pyrogram.client.Client', Env):
             callback_data = "toggle_" + name
           )
         ]
-
     else:
-      if items:
-        modules.append(rows)
-        rows = []
-
+      modules.append(rows)
       modules.append(
         [
           types.InlineKeyboardButton(
@@ -522,19 +517,32 @@ async def execute(bot: 'pyrogram.client.Client', Env):
   settings = await Env.MONGO.biltudas1bot.settings.find_one({}, {'_id': False})
   if settings:
     Env.MODULES = settings['loadModules']
+    with open('modules.json', 'r') as mod_list:
+      load = set(json.load(mod_list)["modules"])
+
+      # Removing any module from the list which is not into modules.json
+      for mod in tuple(Env.MODULES.keys()):
+        if mod.lower() not in load:
+          del Env.MODULES[mod]
+
+      # Adding new modules to the Environment
+      for mod in load:
+        if mod.upper() not in Env.MODULES:
+          Env.MODULES[mod.upper()] = False  # By default new third party modules are not loaded
+    
+    await Env.MONGO.biltudas1bot.settings.update_one({}, {'$set': {'loadModules': Env.MODULES}})
   else:
-    Env.MODULES = {
-      'FORWARD': True,
-      'SRC': True,
-      'LEECH': True,
-      'FILE': True
-    }
+    Env.MODULES = {}
+    with open('modules.json', 'r') as mod_list:
+      for mod in list(json.load(mod_list)["modules"]):
+        Env.MODULES[mod.upper()] = True
+
     await Env.MONGO.biltudas1bot.settings.insert_one({'loadModules': Env.MODULES})
 
 
   # Enable Global Lock
-  if not 'global_lock' in settings or not settings['global_lock']:
-    Env.MONGO.biltudas1bot.settings.update_one({}, {'$set': {'global_lock': True}})
+  if settings is None or not 'global_lock' in settings or not settings['global_lock']:
+    await Env.MONGO.biltudas1bot.settings.update_one({}, {'$set': {'global_lock': True}})
   else:
     if not os.path.exists('suspend.lock'):
       return "TERMINATE"
@@ -543,7 +551,7 @@ async def execute(bot: 'pyrogram.client.Client', Env):
 
 
   # Set Restart flag accordingly
-  if 'restarted' in settings:
+  if settings and 'restarted' in settings:
     if settings['restarted']:
       Env.RESTARTED = settings['restarted']
       Env.RESTARTED_BY_USER = int(settings['restarted_by'])

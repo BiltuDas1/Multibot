@@ -15,9 +15,10 @@ import asyncio
 import pyrogram
 import time
 import signal
+import importlib
 from pyrogram import filters
-from apis import Env, account, bot, errors
-from modules import forward, default, src
+from apis import Env, account, bot, errors, default
+import modules
 
 
 def terminate_handler(sig, frame):
@@ -56,21 +57,18 @@ def terminate_lock():
 
 
 async def main():
-  # Loading modules
+  # Loading Default module
   if (await default.execute(bot, Env)) == "TERMINATE":
     print("Bot Process Terminated by Global Lock")
     disable_local_lock()
     terminate_lock()
     return
 
-  if Env.MODULES["FORWARD"]:
-    await forward.personal_message(bot, Env)
-  if Env.MODULES["SRC"]:
-    await src.save_restricted_content(bot, account, Env)
-  if Env.MODULES["LEECH"]:
-    pass
-  if Env.MODULES["FILE"]:
-    pass
+  # Loading Custom Modules
+  for mod, enabled in Env.MODULES.items():
+    if enabled:
+      module = importlib.import_module(f"modules.{mod.lower()}")
+      await module.execute(bot, account, Env)
 
   print("Bot started")
 

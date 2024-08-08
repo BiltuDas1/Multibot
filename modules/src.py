@@ -8,7 +8,7 @@ import time
 from pyrogram import filters
 
 
-async def save_restricted_content(bot: pyrogram.client.Client, account: pyrogram.client.Client, Env):
+async def execute(bot: pyrogram.client.Client, account: pyrogram.client.Client, Env):
 
   async def get_file_size(message: pyrogram.types.Message) -> int:
     """
