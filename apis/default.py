@@ -93,8 +93,9 @@ async def execute(bot: 'pyrogram.client.Client', Env):
       await Env.MONGO.biltudas1bot.userList.update_one({'ID': user.id}, {'$set': {'lastPing': lastPing}})
 
 
-  @bot.on_message(filters.command(["start"]) & filters.private)
+  @bot.on_message(filters.command(["start"]) & filters.private & filters.regex("^\/start$"))
   async def start_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    print(message.text)
     if str(message.from_user.id) in Env.ADMIN:
       await client.send_message(
         chat_id = message.from_user.id,

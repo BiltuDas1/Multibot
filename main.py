@@ -77,6 +77,9 @@ async def main():
   while loop:
     try:
       async with bot:
+        # Get Bot username
+        Env.BOT_USERNAME = (await bot.get_me()).username
+
         if Env.RESTARTED:
           await bot.send_message(
             chat_id = int(Env.RESTARTED_BY_USER),
