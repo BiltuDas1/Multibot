@@ -881,6 +881,34 @@ async def execute(bot: pyrogram.client.Client, account: pyrogram.client.Client, 
             text = f"**Error:** __{e1}__"
           )
     
+    elif pattern_url := re.search("^(https|http):\/\/(t.me|telegram.me)\/b\/(\D[\w]{4,31})\/(\d+)\/?(\?single)?$", url):
+      # Match Bot message
+      chat_name = str(pattern_url.group(3))
+      chat_message_id = int(pattern_url.group(4))
+
+      try:
+        await handle_private_chat(
+          message = message,
+          chatid = chat_name,
+          msgid = chat_message_id,
+          private = False,
+          batch_job = batch_job
+        )
+      except pyrogram.errors.UsernameNotOccupied:
+        await bot.send_message(
+          chat_id = int(Env.GROUP_ID),
+          message_thread_id = message.id,
+          reply_to_message_id = message.id,
+          text = "**Error: The chat doesn't seem to be exist**"
+        )
+      except Exception as e:
+        await bot.send_message(
+          chat_id = int(Env.GROUP_ID),
+          message_thread_id = message.id,
+          reply_to_message_id = message.id,
+          text = f"**Error:** __{e}__"
+        )
+
     else:
       # Invalid URL
       await bot.send_message(
