@@ -1,7 +1,10 @@
 import os
 import platform
 import re
+import httpx
+
 from .errors import Error
+
 
 class Environment:
   def __init__(self):
@@ -56,9 +59,23 @@ class Environment:
     self.ACTIVE_USERS = set()  # Stores user ID of those whose tasks are running
     self.DOWNLOADED = 0  # Total Downloaded data
     self.UPLOADED = 0  # Total Uploaded data
+    self.SPAMWATCH_TOKEN = os.getenv("SPAMWATCH_TOKEN")  # SpamWatch API Token
+
+    combot = os.getenv("ENABLE_COMBOT")
+    if combot is None:
+      self.COMBOT_ENABLED = True
+    else:
+      if combot in ("yes", "true"):
+        self.COMBOT_ENABLED = True
+      elif combot in ("no", "false"):
+        self.COMBOT_ENABLED = False
+      else:
+        raise Error("INVALID_COMBOT")
 
     self.__test_data()  # For testing the Environments
 
+    if self.SPAMWATCH_TOKEN is not None:
+      self.__check_spamwatch_token()
 
   def __test_data(self):
     # Checking Admin IDs
@@ -77,7 +94,7 @@ class Environment:
 
     if re.match("^[0-9]{8,10}:[a-zA-Z0-9_-]{35}$", self.BOT_TOKEN) is None:
       raise Error('INVALID_TG_BOT_TOKEN')
-      
+
     # Checking the Group ID
     if self.GROUP_ID is None:
       raise Error('NO_GROUP_ID')
@@ -130,3 +147,12 @@ class Environment:
     if self.DUMP_CHAT is not None:
       if re.match("^-100\d+$", self.DUMP_CHAT) is None:
         raise Error('INVALID_DUMP_CHAT_ID')
+
+  def __check_spamwatch_token(self):
+    test = httpx.get(
+      url="https://api.spamwat.ch/banlist/0",
+      headers={'Authorization': "Bearer " + self.SPAMWATCH_TOKEN}
+    )
+
+    if test.status_code == 401:
+      raise Error("INVALID_SPAMWATCH_TOKEN")

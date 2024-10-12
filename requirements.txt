@@ -6,3 +6,4 @@ psutil
 motor
 python-dateutil
 bidict
+httpx

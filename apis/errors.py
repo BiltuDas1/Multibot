@@ -1,10 +1,11 @@
 import os
 
+
 class Error(Exception):
     """
     Exception Class for any kind of Error encounter in the Telegram bot
     """
-    
+
     __ERR_MSG_LIST = {
         0: "Something unexpected happened into the code, please contact the developer",
         1: "BOT_TOKEN Environment can't be empty",
@@ -25,7 +26,9 @@ class Error(Exception):
         16: "MONGO_URI contains invalid URI, Please provide the correct URI",
         17: "Invalid CACHE value, it only can be true, false, yes, no",
         18: "DUMP_CHAT Environment can't be empty when CACHE is enabled",
-        19: "DUMP_CHAT Environment have invalid ID, Please Provide the correct one and try again"
+        19: "DUMP_CHAT Environment have invalid ID, Please Provide the correct one and try again",
+        20: "Invalid ENABLE_COMBOT value, it only can be true, false, yes, no",
+        21: "SPAMWATCH_TOKEN contains invalid API Token, Please provide the correct one"
     }
 
     __ERR_CODE_LIST = {
@@ -48,10 +51,12 @@ class Error(Exception):
         "INVALID_MONGO_URI": 16,
         "INVALID_CACHE": 17,
         "NO_DUMP_CHAT_ID": 18,
-        "INVALID_DUMP_CHAT_ID": 19
+        "INVALID_DUMP_CHAT_ID": 19,
+        "INVALID_COMBOT": 20,
+        "INVALID_SPAMWATCH_TOKEN": 21
     }
 
-    def __init__(self, ERR_CODE: 'str', MSG: 'str'=None):
+    def __init__(self, ERR_CODE: 'str', MSG: 'str' = None):
         if type(ERR_CODE) == str:
             self.__ERR_CODE = int(self.__ERR_CODE_LIST[ERR_CODE])
         else:
@@ -74,10 +79,9 @@ class Error(Exception):
 
     def __str__(self):
         return self.__MSG
-    
+
     def ErrorCode(self):
         """
         Returns the Error Code (in int)
         """
         return self.__ERR_CODE
-    
