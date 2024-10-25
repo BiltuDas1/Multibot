@@ -90,11 +90,16 @@ async def execute(bot: pyrogram.client.Client, account: pyrogram.client.Client, 
           )
         )
       except pyrogram.errors.ButtonUserPrivacyRestricted:
-        # If the user profile is not public
+        # If the user profile is not public then send a message and delete the existing blank topic
         await client.send_message(
           chat_id=message.from_user.id,
-          text="**Error:** You must set an username to continue using this bot. This is for keeping away most of the spammers. After setting the username and sending first message to the bot owner, you can remove your username or can keep it.",
+          text="**Error:** You must set an username to continue using this bot.",
           reply_to_message_id=message.id
+        )
+
+        await client.delete_forum_topic(
+          chat_id=int(Env.GROUP_ID),
+          topic_id=thread.id
         )
         return
 
