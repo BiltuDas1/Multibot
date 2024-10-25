@@ -12,18 +12,18 @@ Env.MONGO: 'motor_asyncio.AsyncIOMotorClient' = motor_asyncio.AsyncIOMotorClient
 # Setting up Client and Bot
 bot: 'pyrogram.client.Client' = pyrogram.Client(
   "bot",
-  api_id = Env.API_ID,
-  api_hash = Env.API_HASH,
-  bot_token = Env.BOT_TOKEN
+  api_id=Env.API_ID,
+  api_hash=Env.API_HASH,
+  bot_token=Env.BOT_TOKEN
 )
 
 account: 'pyrogram.client.Client' = pyrogram.Client(
   "telegram_account",
-  api_id = Env.API_ID,
-  api_hash = Env.API_HASH,
-  session_string = Env.SESSION_TOKEN,
-  device_model = f"BiltuDas1Bot {Env.BOT_VERSION}",
-  app_version = f"Python {Env.PYTHON_VERSION}"
+  api_id=Env.API_ID,
+  api_hash=Env.API_HASH,
+  session_string=Env.SESSION_TOKEN,
+  device_model=f"BiltuDas1Bot {Env.BOT_VERSION}",
+  app_version=f"Python {Env.PYTHON_VERSION}"
 )
 account.start()
 

@@ -11,6 +11,7 @@ class Environment:
     # Loading Data from Environments
     self.BOT_TOKEN = os.getenv("BOT_TOKEN")
     self.GROUP_ID = os.getenv("GROUP_ID")
+    self.DATABASE_LOCK = False  # Global Database Writing Lock
 
     if (ids := os.getenv("OWNER_IDs")) is not None:
       self.ADMIN = tuple(ids.split(" "))

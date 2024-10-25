@@ -66,7 +66,8 @@ async def execute(bot: 'pyrogram.client.Client', Env):
 
     return final_msg
 
-  async def store_user_info(user: 'pyrogram.types.User', lastPing: 'int', banned=False):
+  async def store_user_info(user: 'pyrogram.types.User', lastPing: 'int', banned=False, blocked=False):
+    Env.DATABASE_LOCK = True
     user_record = await Env.MONGO.biltudas1bot.userList.find_one({'ID': user.id})
 
     if user_record is None:
@@ -89,50 +90,52 @@ async def execute(bot: 'pyrogram.client.Client', Env):
         }
       )
     else:
-      # Update the existing user last Interaction time
-      await Env.MONGO.biltudas1bot.userList.update_one({'ID': user.id}, {'$set': {'lastPing': lastPing}})
+      await Env.MONGO.biltudas1bot.userList.update_one(
+        {'ID': user.id},
+        {'$set': {'lastPing': lastPing, 'banned': banned, 'blocked': blocked}}
+      )
+    Env.DATABASE_LOCK = False
 
   @bot.on_message(filters.command(["start"]) & filters.private & filters.regex("^\/start$"))
-  async def start_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+  async def start_handler(client: 'pyrogram.client.Client', message: 'pyrogram.types.Message'):
     spammer = False
+    lastPing = dateutil.parser.parse(message.date.isoformat())
 
     if str(message.from_user.id) in Env.ADMIN:
       await client.send_message(
         chat_id=message.from_user.id,
-        text=f"Bot Online ✅"
+        text=f"Bot Online ✅",
+        reply_to_message_id=message.id
       )
     else:
+      await store_user_info(message.from_user, lastPing)
+      await client.send_message(
+        chat_id=message.from_user.id,
+        text=f"Hello **{message.from_user.first_name}**!\nI'm an Assistant of **@{Env.OWNER_USERNAME}**, you can write me anything and I will forward it to the owner, Thanks.",
+        reply_to_message_id=message.id
+      )
+
       if Env.COMBOT_ENABLED:
         # Check if the user is banned in Combot Feed
-        combot_resp = httpx.get("https://api.cas.chat/check", params={'user_id': message.from_user.id})
-        if combot_resp.status_code == 200:
-          if json.loads(combot_resp.text)['ok']:
-            spammer = True
+        async with httpx.AsyncClient() as httpxClient:
+          combot_resp = await httpxClient.get("https://api.cas.chat/check", params={'user_id': message.from_user.id})
+          if combot_resp.status_code == 200:
+            if json.loads(combot_resp.text)['ok']:
+              spammer = True
 
       if Env.SPAMWATCH_TOKEN is not None:
         # Check if user is banned in SpamWatch Feed
-        swatch_resp = httpx.get(f"https://api.spamwat.ch/banlist/{message.from_user.id}",
-                                headers={'Authorization': f"Bearer {Env.SPAMWATCH_TOKEN}"})
-        if swatch_resp.status_code == 200:  # When User is not a spammer, then SpamWatch returns 404 status code
-          spammer = True
+        async with httpx.AsyncClient() as httpxClient:
+          swatch_resp = await httpxClient.get(f"https://api.spamwat.ch/banlist/{message.from_user.id}",
+                                              headers={'Authorization': f"Bearer {Env.SPAMWATCH_TOKEN}"})
+          if swatch_resp.status_code == 200:  # When User is not a spammer, then SpamWatch returns 404 status code
+            spammer = True
 
-      if not spammer:
-        await client.send_message(
-          chat_id=message.from_user.id,
-          text=f"Hello **{message.from_user.first_name}**!\nI'm an Assistant of **@{Env.OWNER_USERNAME}**, you can write me anything and I will forward it to the admins, Thanks."
-        )
-      else:
-        await client.send_message(
-          chat_id=message.from_user.id,
-          text=f"Hello **{message.from_user.first_name}**!\nSorry, you don't have permission to use the bot."
-        )
-
-    # Store the data in database
-    lastPing = dateutil.parser.parse(message.date.isoformat())
+    # Store the banned information in database
     await store_user_info(message.from_user, lastPing, banned=spammer)
 
   @bot.on_message(filters.group & pyrogram.filters.new_chat_members)
-  async def start_group_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+  async def start_group_handler(client: 'pyrogram.client.Client', message: 'pyrogram.types.Message'):
     """
     Handler to handle operation when the bot joined in a group
     """
@@ -198,31 +201,42 @@ async def execute(bot: 'pyrogram.client.Client', Env):
         # Send Instructions
         await client.send_message(
           chat_id=message.chat.id,
-          text=f"Hello [{invited_user.first_name}](tg://user?id={invited_user.id})!\nNow follow the steps:\n1. Goto @BotFather and use /mybots command\n2. Choose **@{Env.BOT_USERNAME}** from the list\n3. Choose Bot Settings > Allow Groups?\n4. Turn the groups off"
+          text=f"Hello [{invited_user.first_name}](tg://user?id={invited_user.id})!\nNow follow the steps:\n1. Goto @BotFather and use /mybots command\n2. Choose **@{Env.BOT_USERNAME}** from the list\n3. Choose Bot Settings > Allow Groups?\n4. Turn the groups off",
+          reply_markup=types.InlineKeyboardMarkup(
+            [
+              [
+                types.InlineKeyboardButton(
+                  text="Ok Understood",
+                  callback_data="delete_message"
+                )
+              ]
+            ]
+          )
         )
 
   @bot.on_chat_member_updated(filters.private)
   async def block_unblock(client: 'pyrogram.client.Client', chatmember: 'pyrogram.types.ChatMemberUpdated'):
+    lastPing = dateutil.parser.parse(datetime.today().isoformat())
     if chatmember.new_chat_member.status is pyrogram.enums.ChatMemberStatus.BANNED:
       # The bot is blocked by the user
-      lastPing = dateutil.parser.parse(datetime.today().isoformat())
-      await Env.MONGO.biltudas1bot.userList.update_one({'ID': chatmember.from_user.id},
-                                                       {'$set': {'blocked': True, 'lastPing': lastPing}})
+      await store_user_info(chatmember.from_user, lastPing, blocked=True)
     else:
       # The bot is unblocked by the user
-      await Env.MONGO.biltudas1bot.userList.update_one({'ID': chatmember.from_user.id}, {'$set': {'blocked': False}})
+      await store_user_info(chatmember.from_user, lastPing, blocked=False)
 
   @bot.on_message(filters.private & filters.command("help"))
   async def help_method(client: 'pyrogram.client.Client', message: 'pyrogram.types.Message'):
     if str(message.from_user.id) in Env.ADMIN:
       await client.send_message(
         chat_id=message.chat.id,
-        text=Env.HELP_ADMIN_MESSAGE
+        text=Env.HELP_ADMIN_MESSAGE,
+        reply_to_message_id=message.id
       )
     else:
       await client.send_message(
         chat_id=message.chat.id,
-        text=Env.HELP_USER_MESSAGE
+        text=Env.HELP_USER_MESSAGE,
+        reply_to_message_id=message.id
       )
 
     # Store user info in database
@@ -336,7 +350,7 @@ async def execute(bot: 'pyrogram.client.Client', Env):
     )
 
   @bot.on_message(filters.private & filters.command("power") & filters.user([int(uid) for uid in Env.ADMIN]))
-  async def power_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+  async def power_handler(client: 'pyrogram.client.Client', message: 'pyrogram.types.Message'):
     await client.send_message(
       chat_id=message.chat.id,
       text="Choose the Operation",
@@ -365,7 +379,7 @@ async def execute(bot: 'pyrogram.client.Client', Env):
     )
 
   @bot.on_message(filters.private & filters.command("set") & filters.user([int(uid) for uid in Env.ADMIN]))
-  async def set_msg(client: pyrogram.client.Client, message: pyrogram.types.Message):
+  async def set_msg(client: 'pyrogram.client.Client', message: 'pyrogram.types.Message'):
     try:
       text = str(message.text).split(" ", 1)[1]
     except IndexError:
@@ -385,7 +399,7 @@ async def execute(bot: 'pyrogram.client.Client', Env):
     )
 
   @bot.on_message(filters.private & filters.command("feed") & filters.user([int(uid) for uid in Env.ADMIN]))
-  async def feed_msg(client: pyrogram.client.Client, message: pyrogram.types.Message):
+  async def feed_msg(client: 'pyrogram.client.Client', message: 'pyrogram.types.Message'):
     msg = Env.MONGO.biltudas1bot.feeds.aggregate([{'$match': {'seen': False}}, {'$sample': {'size': 1}}])
 
     async for feed in msg:
@@ -408,7 +422,7 @@ async def execute(bot: 'pyrogram.client.Client', Env):
       )
 
   @bot.on_callback_query(filters.regex("^refresh_stats$"))
-  async def refresh_stats_machine(client: pyrogram.client.Client, callback_query: pyrogram.types.CallbackQuery):
+  async def refresh_stats_machine(client: 'pyrogram.client.Client', callback_query: 'pyrogram.types.CallbackQuery'):
     if str(callback_query.from_user.id) in Env.ADMIN:
       await callback_query.message.edit_text(
         text="__Gathering Information...__"
@@ -485,7 +499,7 @@ async def execute(bot: 'pyrogram.client.Client', Env):
         )
 
   @bot.on_callback_query(filters.regex("^power_off$"))
-  async def shutdown_bot(client: pyrogram.client.Client, callback_query: pyrogram.types.CallbackQuery):
+  async def shutdown_bot(client: 'pyrogram.client.Client', callback_query: 'pyrogram.types.CallbackQuery'):
     if str(callback_query.from_user.id) in Env.ADMIN:
       await client.answer_callback_query(
         callback_query_id=callback_query.id,

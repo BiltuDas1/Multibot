@@ -4,22 +4,36 @@ import dateutil
 from bidict import bidict
 from pyrogram import filters
 
+
 async def execute(bot: pyrogram.client.Client, account: pyrogram.client.Client, Env):
   """
   Function to enable functionality of user to user direct message bot
   """
+
   @bot.on_message(filters.private & filters.create(lambda a, b, msg: str(msg.from_user.id) not in Env.ADMIN))
   async def user_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    # Wait for the Database Lock (10 seconds) to be unlocked
+    for _ in range(20):
+      if not Env.DATABASE_LOCK:
+        break
+      await asyncio.sleep(0.5)
+    else:
+      return
+
     user_details = await Env.MONGO.biltudas1bot.userList.find_one({'ID': message.chat.id}, {'_id': False})
     # If user data is not available
     if user_details is None:
       await client.send_message(
-        chat_id = message.chat.id,
-        text = "Something Went Wrong, Please use /start again"
+        chat_id=message.chat.id,
+        text="Something Went Wrong, Please use /start again"
       )
       return
 
     if user_details["banned"]:
+      await client.send_message(
+        chat_id=message.from_user.id,
+        text=f"Hello **{message.from_user.first_name}**!\nSorry, you don't have enough permission to use the bot."
+      )
       lastPing = dateutil.parser.parse(message.date.isoformat())
       await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.chat.id}, {'$set': {'lastPing': lastPing}})
       return
@@ -36,8 +50,8 @@ async def execute(bot: pyrogram.client.Client, account: pyrogram.client.Client, 
 
       # Create a new topic
       thread = await client.create_forum_topic(
-        chat_id = int(Env.GROUP_ID),
-        title = name
+        chat_id=int(Env.GROUP_ID),
+        title=name
       )
 
       # Get DataCenter
@@ -52,12 +66,37 @@ async def execute(bot: pyrogram.client.Client, account: pyrogram.client.Client, 
       else:
         user_type = "Regular User"
 
-      # Store user info in topic
-      user_info = await client.send_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = thread.id,
-        text = f"Name: {name}\nUserID: `{message.from_user.id}`\nLanguage: {message.from_user.language_code}\nDataCenter: {dc}\nUser Type: {user_type}\nProfile Permalink: tg://user?id={message.from_user.id}"
-      )
+      # If user have a username
+      if message.from_user.username is not None:
+        username = "\nUsername: @" + message.from_user.username
+      else:
+        username = ""
+
+      # Store user info in Channel
+      try:
+        user_info = await client.send_message(
+          chat_id=int(Env.GROUP_ID),
+          message_thread_id=thread.id,
+          text=f"Name: {name}\nUserID: `{message.from_user.id}`\nLanguage: {message.from_user.language_code}\nDataCenter: {dc}\nUser Type: {user_type}{username}",
+          reply_markup=pyrogram.types.InlineKeyboardMarkup(
+            [
+              [
+                pyrogram.types.InlineKeyboardButton(
+                  text="User Profile",
+                  user_id=message.from_user.id
+                )
+              ]
+            ]
+          )
+        )
+      except pyrogram.errors.ButtonUserPrivacyRestricted:
+        # If the user profile is not public
+        await client.send_message(
+          chat_id=message.from_user.id,
+          text="**Error:** You must set an username to continue using this bot. This is for keeping away most of the spammers. After setting the username and sending first message to the bot owner, you can remove your username or can keep it.",
+          reply_to_message_id=message.id
+        )
+        return
 
       topicID = thread.id
       userInfoID = user_info.message_thread_id
@@ -75,58 +114,57 @@ async def execute(bot: pyrogram.client.Client, account: pyrogram.client.Client, 
     # If topicID exist then send message to that topicID
     if message.forward_date is None:
       forward_msg = await client.copy_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = int(topicID),
-        from_chat_id = message.chat.id,
-        reply_to_message_id = reply_message,
-        message_id = message.id
+        chat_id=int(Env.GROUP_ID),
+        message_thread_id=int(topicID),
+        from_chat_id=message.chat.id,
+        reply_to_message_id=reply_message,
+        message_id=message.id
       )
     else:
       forward_msg = await client.forward_messages(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = int(topicID),
-        from_chat_id = message.chat.id,
-        message_ids = message.id
+        chat_id=int(Env.GROUP_ID),
+        message_thread_id=int(topicID),
+        from_chat_id=message.chat.id,
+        message_ids=message.id
       )
 
     # Send Acknowledgement Message to user
     ack = await client.send_message(
-      chat_id = message.chat.id,
-      text = "Message Sended ✅"
+      chat_id=message.chat.id,
+      text="Message Sended ✅"
     )
 
     # Store data in Database
     lastPing = dateutil.parser.parse(message.date.isoformat())
     if user_details["topicID"] is None:
       await Env.MONGO.biltudas1bot.userList.update_one(
-        {'ID': message.chat.id}, 
+        {'ID': message.chat.id},
         {'$set': {
-          'topicID': topicID, 
-          'userInfoID': userInfoID, 
+          'topicID': topicID,
+          'userInfoID': userInfoID,
           'lastPing': lastPing,
           'messageIDList': {
-              str(message.id): str(forward_msg.id)
-            }
+            str(message.id): str(forward_msg.id)
           }
+        }
         }
       )
     else:
       await Env.MONGO.biltudas1bot.userList.update_one(
-        {'ID': message.chat.id}, 
+        {'ID': message.chat.id},
         {'$set': {
           'lastPing': lastPing,
           f'messageIDList.{message.id}': str(forward_msg.id)
-          }
+        }
         }
       )
 
     # Delete Ackowledgement Message (After 5 seconds)
     await asyncio.sleep(5)
     await client.delete_messages(
-      chat_id = message.chat.id,
-      message_ids = ack.id
+      chat_id=message.chat.id,
+      message_ids=ack.id
     )
-
 
   @bot.on_edited_message(filters.private & filters.create(lambda a, b, msg: str(msg.from_user.id) not in Env.ADMIN))
   async def user_edited_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
@@ -134,120 +172,134 @@ async def execute(bot: pyrogram.client.Client, account: pyrogram.client.Client, 
     # If user data is not available
     if user_details is None:
       await client.send_message(
-        chat_id = message.chat.id,
-        text = "Something Went Wrong, Please use /start again"
+        chat_id=message.chat.id,
+        text="Something Went Wrong, Please use /start again"
       )
       return
 
     if user_details["banned"]:
+      await client.send_message(
+        chat_id=message.from_user.id,
+        text=f"Hello **{message.from_user.first_name}**!\nSorry, you don't have enough permission to use the bot."
+      )
       return
 
     if user_details["topicID"] is None:
+      await client.send_message(
+        chat_id=message.chat.id,
+        text="Something Went Wrong, Please use /start again"
+      )
       return
 
     # Edit message on the Admin Side
     forward_msg_id = int(user_details["messageIDList"][str(message.id)])
     await client.edit_message_text(
-      chat_id = int(Env.GROUP_ID),
-      message_id = forward_msg_id,
-      text = message.text
+      chat_id=int(Env.GROUP_ID),
+      message_id=forward_msg_id,
+      text=message.text
     )
 
     # Store data in database
     lastPing = dateutil.parser.parse(message.date.isoformat())
     await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.chat.id}, {'$set': {'lastPing': lastPing}})
 
-
-  @bot.on_message(filters.command("ban") & filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
+  @bot.on_message(filters.command("ban") & filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(
+    lambda a, b, msg: msg.message_thread_id != 1) & filters.create(
+    lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
   async def admin_ban_user_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
-    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
+    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id},
+                                                                  {'_id': False})
 
     if user_details is None:
       await client.send_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = message.message_thread_id,
-        reply_to_message_id = message.id,
-        text = "**Error: User record not found, Please make sure that the user started the bot before.**"
+        chat_id=int(Env.GROUP_ID),
+        message_thread_id=message.message_thread_id,
+        reply_to_message_id=message.id,
+        text="**Error: User record not found, Please make sure that the user started the bot before.**"
       )
       return
 
     if user_details['banned']:
       await client.send_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = message.message_thread_id,
-        text = f"**User is already banned**"
+        chat_id=int(Env.GROUP_ID),
+        message_thread_id=message.message_thread_id,
+        text=f"**User is already banned**"
       )
       return
 
     # Send Admin Ban Acknowledgement Message
     await Env.MONGO.biltudas1bot.userList.update_one({'ID': user_details['ID']}, {'$set': {'banned': True}})
     await client.send_message(
-      chat_id = int(Env.GROUP_ID),
-      message_thread_id = message.message_thread_id,
-      text = f"**User Banned: {user_details['Name']} ({user_details['ID']})**"
+      chat_id=int(Env.GROUP_ID),
+      message_thread_id=message.message_thread_id,
+      text=f"**User Banned: {user_details['Name']} ({user_details['ID']})**"
     )
 
     # Store lastPing time to database
     lastPing = dateutil.parser.parse(message.date.isoformat())
     await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
 
-
-  @bot.on_message(filters.command("unban") & filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
+  @bot.on_message(filters.command("unban") & filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(
+    lambda a, b, msg: msg.message_thread_id != 1) & filters.create(
+    lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
   async def admin_unban_user_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
-    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
+    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id},
+                                                                  {'_id': False})
 
     if user_details is None:
       await client.send_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = message.message_thread_id,
-        reply_to_message_id = message.id,
-        text = "**Error: User record not found, Please make sure that the user started the bot before.**"
+        chat_id=int(Env.GROUP_ID),
+        message_thread_id=message.message_thread_id,
+        reply_to_message_id=message.id,
+        text="**Error: User record not found, Please make sure that the user started the bot before.**"
       )
       return
 
     if not user_details['banned']:
       await client.send_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = message.message_thread_id,
-        text = f"**User already Unbanned**"
+        chat_id=int(Env.GROUP_ID),
+        message_thread_id=message.message_thread_id,
+        text=f"**User already Unbanned**"
       )
       return
 
     # Send Admin Unban Acknowledgement Message
     await Env.MONGO.biltudas1bot.userList.update_one({'ID': user_details['ID']}, {'$set': {'banned': False}})
     await client.send_message(
-      chat_id = int(Env.GROUP_ID),
-      message_thread_id = message.message_thread_id,
-      text = f"**User Unbanned: {user_details['Name']} ({user_details['ID']})**"
+      chat_id=int(Env.GROUP_ID),
+      message_thread_id=message.message_thread_id,
+      text=f"**User Unbanned: {user_details['Name']} ({user_details['ID']})**"
     )
 
     # Store lastPing time to database
     lastPing = dateutil.parser.parse(message.date.isoformat())
     await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
 
-
-  @bot.on_message(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
+  @bot.on_message(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(
+    lambda a, b, msg: msg.message_thread_id != 1) & filters.create(
+    lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
   async def admin_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
-    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
+    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id},
+                                                                  {'_id': False})
 
     if user_details is None:
       await client.send_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = message.message_thread_id,
-        reply_to_message_id = message.id,
-        text = "**Error: User record not found, Please make sure that the user started the bot before.**"
+        chat_id=int(Env.GROUP_ID),
+        message_thread_id=message.message_thread_id,
+        reply_to_message_id=message.id,
+        text="**Error: User record not found, Please make sure that the user started the bot before.**"
       )
       return
 
     if user_details["blocked"]:
       await client.send_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = message.message_thread_id,
-        reply_to_message_id = message.id,
-        text = f"**Error: User blocked the bot, so Sending Message is not Possible.**"
+        chat_id=int(Env.GROUP_ID),
+        message_thread_id=message.message_thread_id,
+        reply_to_message_id=message.id,
+        text=f"**Error: User blocked the bot, so Sending Message is not Possible.**"
       )
       return
-      
+
     topicID = message.message_thread_id
     uid = user_details["ID"]
 
@@ -262,25 +314,32 @@ async def execute(bot: pyrogram.client.Client, account: pyrogram.client.Client, 
     # Copy/Forward the message to the user
     if message.forward_date is None:
       forward_msg_user = await client.copy_message(
-        chat_id = int(uid),
-        message_thread_id = int(topicID),
-        from_chat_id = message.chat.id,
-        reply_to_message_id = reply_message,
-        message_id = message.id
+        chat_id=int(uid),
+        message_thread_id=int(topicID),
+        from_chat_id=message.chat.id,
+        reply_to_message_id=reply_message,
+        message_id=message.id
       )
     else:
       forward_msg_user = await client.forward_messages(
-        chat_id = int(uid),
-        message_thread_id = int(topicID),
-        from_chat_id = message.chat.id,
-        message_ids = message.id
+        chat_id=int(uid),
+        message_thread_id=int(topicID),
+        from_chat_id=message.chat.id,
+        message_ids=message.id
       )
+
+    # Send Acknowledgement Message to the Owner
+    await client.send_reaction(
+      chat_id=message.chat.id,
+      message_id=message.id,
+      emoji="👍"
+    )
 
     # Store lastPing time to database
     lastPing = dateutil.parser.parse(message.date.isoformat())
     await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
     await Env.MONGO.biltudas1bot.userList.update_one(
-      {'topicID': message.message_thread_id}, 
+      {'topicID': message.message_thread_id},
       {
         '$set': {
           f'messageIDList.{forward_msg_user.id}': str(message.id)
@@ -288,39 +347,48 @@ async def execute(bot: pyrogram.client.Client, account: pyrogram.client.Client, 
       }
     )
 
+    # Retract the reaction
+    await asyncio.sleep(5)
+    await client.send_reaction(
+      chat_id=message.chat.id,
+      message_id=message.id,
+      emoji=None
+    )
 
-  @bot.on_edited_message(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(lambda a, b, msg: msg.message_thread_id != 1) & filters.create(lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
-  async def admin_edited_message_hander(client: pyrogram.client.Client, message: pyrogram.types.Message):
-    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id}, {'_id': False})
+  @bot.on_edited_message(filters.group & filters.chat(int(Env.GROUP_ID)) & filters.create(
+    lambda a, b, msg: msg.message_thread_id != 1) & filters.create(
+    lambda a, b, msg: str(msg.from_user.id) in Env.ADMIN))
+  async def admin_edited_message_handler(client: pyrogram.client.Client, message: pyrogram.types.Message):
+    user_details = await Env.MONGO.biltudas1bot.userList.find_one({'topicID': message.message_thread_id},
+                                                                  {'_id': False})
 
     if user_details is None:
       await client.send_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = message.message_thread_id,
-        reply_to_message_id = message.id,
-        text = "**Error: User record not found, Please make sure that the user started the bot before.**"
+        chat_id=int(Env.GROUP_ID),
+        message_thread_id=message.message_thread_id,
+        reply_to_message_id=message.id,
+        text="**Error: User record not found, Please make sure that the user started the bot before.**"
       )
       return
 
     if user_details["blocked"]:
       await client.send_message(
-        chat_id = int(Env.GROUP_ID),
-        message_thread_id = message.message_thread_id,
-        reply_to_message_id = message.id,
-        text = f"**Error: User blocked the bot, so Editing Message is not Possible.**"
+        chat_id=int(Env.GROUP_ID),
+        message_thread_id=message.message_thread_id,
+        reply_to_message_id=message.id,
+        text=f"**Error: User blocked the bot, so Editing Message is not Possible.**"
       )
       return
-      
+
     uid = user_details["ID"]
     # Edit message on the User Side
     forward_msg_id = int(bidict(user_details["messageIDList"]).inverse[str(message.id)])
     await client.edit_message_text(
-      chat_id = int(uid),
-      message_id = forward_msg_id,
-      text = message.text
+      chat_id=int(uid),
+      message_id=forward_msg_id,
+      text=message.text
     )
 
     # Store lastPing time to database
     lastPing = dateutil.parser.parse(message.date.isoformat())
     await Env.MONGO.biltudas1bot.userList.update_one({'ID': message.from_user.id}, {'$set': {'lastPing': lastPing}})
-
