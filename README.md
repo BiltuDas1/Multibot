@@ -24,6 +24,9 @@ A Telegram personal bot for sending text messages anonynmously, Saving Restricte
   visit [docs.spamwat.ch](https://docs.spamwat.ch/).
 - `ENABLE_COMBOT` Set it to true/yes if you want to enable [combot.org](https://combot.org/) protection (Applicable to
   new users only, old users are not affected). Otherwise set it to false/no. Default is true/yes.
+- `NTFY_TOPIC` Set this to enable remote logging, It will send you notification when an error occurred in the bot
+  server, You need to create a topic at first, visit [ntfy.sh](https://ntfy.sh)
+  for more information. (Make sure that curl and nc is installed into the system, otherwise the service won't work)
 
 ## Deploy
 
@@ -37,7 +40,9 @@ Use the [Docker image](https://hub.docker.com/r/biltudas1/multibot) to deploy in
 2. Use `sh run.sh` to start the bot. (It should be the starting point of the bot)
 
 ```
-Note: Don't run the main.py file directly, for handling the power off/restart signal the run.sh is required to be executed as the parent process of main.py. Also it handles all kind of locks to prevent race conditions.
+Note: Don't run the main.py file directly, for handling the power off/restart signal the run.sh
+is required to be executed as the parent process of main.py. Also it handles all kind of locks
+to prevent race conditions.
 ```
 
 ## External References
@@ -47,3 +52,6 @@ Note: Don't run the main.py file directly, for handling the power off/restart si
 - [Save Restricted Content Repo](https://github.com/bipinkrish/Save-Restricted-Bot): Used as the base repo for the SRC
   Module
 - [httpx](https://github.com/encode/httpx): For interacting with External HTTP APIs (i.e Combot API, SpamWatch API)
+- [Termbin](https://termbin.com): For pasting all the logs for debugging (Don't try to leak any sensitive
+  information)
+- [ntfy](https://ntfy.sh): For letting the owner know if any server side error occurred

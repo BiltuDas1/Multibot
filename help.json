@@ -10,7 +10,6 @@
     "store": "Stores the message inside the bot",
     "shorten": "Shorten an URL (using tinyurl)",
     "id": "Gets the Chat ID of Current user",
-    "ids": "Print last 10 users and their Chat IDs",
     "set": "Set the feed information",
     "feed": "Get random feed message",
     "modules": "Enable/Disable specific Module",

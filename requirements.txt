@@ -1,5 +1,5 @@
 Flask
-Gunicorn
+waitress
 TgCrypto
 pyrofork
 psutil
